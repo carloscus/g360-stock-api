@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+from typing import Optional
+
+from fastapi import APIRouter, HTTPException, Query
+
+from app.models.schemas import ItemStock, StockResponse
+from app.services.s1_service import servicio_stock
+
+router = APIRouter(tags=["stock"])
+
+
+@router.get(
+    "/api/v1/stock",
+    response_model=StockResponse,
+    summary="Listar stock de todos los productos",
+    description="Obtiene el stock consolidado desde la fuente S1 (appweb.cipsa.com.pe). "
+    "Acepta filtros opcionales por almacen y busqueda de texto.",
+)
+def listar_stock(
+    almacen: Optional[str] = Query(
+        None,
+        description="Filtrar por codigo de almacen (ej: VES, 40, 118)",
+    ),
+    search: Optional[str] = Query(
+        None,
+        description="Buscar por SKU o descripcion del producto",
+    ),
+    linea: Optional[str] = Query(
+        None,
+        description="Filtrar por linea de producto (ej: HERRAMIENTAS, MAQUINAS)",
+    ),
+    um: Optional[str] = Query(
+        None,
+        description="Filtrar por unidad de medida (ej: UND, BST, KGR, CJA)",
+    ),
+) -> StockResponse:
+    return servicio_stock.obtener_stock(almacen=almacen, busqueda=search, linea=linea, um=um)
+
+
+@router.get(
+    "/api/v1/stock/{sku}",
+    response_model=ItemStock,
+    summary="Obtener detalle de un SKU",
+    description="Busca un producto por su codigo SKU y devuelve su detalle "
+    "con desglose por almacen.",
+)
+def obtener_sku(sku: str) -> ItemStock:
+    item = servicio_stock.obtener_sku(sku.strip().upper())
+    if not item:
+        raise HTTPException(
+            status_code=404,
+            detail=f"SKU '{sku}' no encontrado en el reporte de stock.",
+        )
+    return item
+
+
+@router.get(
+    "/api/v1/almacenes",
+    summary="Listar almacenes disponibles",
+    description="Devuelve la lista de codigos de almacen con la cantidad "
+    "de SKU que tienen stock registrado en cada uno.",
+)
+def listar_almacenes():
+    return servicio_stock.listar_almacenes()
+
+
+@router.get(
+    "/api/v1/lineas",
+    summary="Listar lineas de producto disponibles",
+    description="Devuelve la lista de lineas de producto con la cantidad "
+    "de SKU registrados en cada una (solamente disponible en formato completo).",
+)
+def listar_lineas():
+    return servicio_stock.listar_lineas()

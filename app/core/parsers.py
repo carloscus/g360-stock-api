@@ -16,7 +16,7 @@ from app.core.constants import (
 )
 from app.core.xls_fallback import leer_xls
 
-PATRON_CATEGORIA = re.compile(r"^(LINEA|GRUPO|TIPO|FAMILIA):\s*(\d+)\s*-\s*(.+)$")
+PATRON_CATEGORIA = re.compile(r"^(LINEA|GRUPO|TIPO|FAMILIA):\s*([\dA-Za-z]+)\s*-\s*(.+)$")
 
 
 def parsear_stock_desde_xls(

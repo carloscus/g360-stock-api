@@ -38,6 +38,10 @@ def listar_stock(
         None,
         description="Filtrar por categoria de negocio (ej: VINIBALL, VINIFAN, INDUSTRIAL)",
     ),
+    fuente: str = Query(
+        "general",
+        description="Fuente de datos: general (VES, 40, 118...), sucursales (S1, S2...), todas",
+    ),
     limit: Optional[int] = Query(
         None,
         description="Maximo de items a retornar (paginacion). Ej: 100",
@@ -52,7 +56,7 @@ def listar_stock(
 ) -> StockResponse:
     return servicio_stock.obtener_stock(
         almacen=almacen, busqueda=search, linea=linea, um=um,
-        categoria=categoria, limit=limit, offset=offset,
+        categoria=categoria, fuente=fuente, limit=limit, offset=offset,
     )
 
 
@@ -63,8 +67,14 @@ def listar_stock(
     description="Busca un producto por su codigo SKU y devuelve su detalle "
     "con desglose por almacen.",
 )
-def obtener_sku(sku: str) -> ItemStock:
-    item = servicio_stock.obtener_sku(sku.strip().upper())
+def obtener_sku(
+    sku: str,
+    fuente: str = Query(
+        "general",
+        description="Fuente de datos: general, sucursales, todas",
+    ),
+) -> ItemStock:
+    item = servicio_stock.obtener_sku(sku.strip().upper(), fuente=fuente)
     if not item:
         raise HTTPException(
             status_code=404,

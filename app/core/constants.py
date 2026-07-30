@@ -26,6 +26,10 @@ ENCABEZADOS_HTTP: dict[str, str] = {
 
 ALMACEN_PRINCIPAL: str = "VES"
 
+ALMACENES_VENTA: set[str] = {"VES", "40", "121", "122", "129", "92", "106"}
+ALMACENES_INFORMATIVO: set[str] = {"118"}
+# Los almacenes S* (sucursales) se detectan por prefijo "S" y son informativos
+
 # ── Categorias de negocio ─────────────────────────────────────────────
 # Lineas explicitas asignadas a cada categoria.
 # Para lineas no listadas, se usa PREFIJOS_CATEGORIA_AUTO para inferir.

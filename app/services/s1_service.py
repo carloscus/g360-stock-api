@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -9,7 +11,13 @@ from typing import Optional
 import httpx
 
 from app.config import settings
-from app.core.constants import ENCABEZADOS_HTTP, ALMACEN_PRINCIPAL, asignar_categoria
+from app.core.constants import (
+    ENCABEZADOS_HTTP,
+    ALMACEN_PRINCIPAL,
+    ALMACENES_VENTA,
+    ALMACENES_INFORMATIVO,
+    asignar_categoria,
+)
 from app.core.parsers import parsear_stock_desde_xls
 from app.models.schemas import (
     AlmacenStock,
@@ -21,13 +29,33 @@ from app.models.schemas import (
 )
 
 
+LIMA_TZ = timezone(timedelta(hours=-5))
+
+
+def _tipo_almacen(codigo: str) -> str:
+    if codigo in ALMACENES_VENTA:
+        return "venta"
+    if codigo in ALMACENES_INFORMATIVO:
+        return "informativo"
+    if codigo.upper().startswith("S"):
+        return "sucursal"
+    return "informativo"
+
+
 class ServicioStock:
     def __init__(self):
-        self._datos_crudos: dict[str, dict[str, dict]] = {}
-        self._items: list[ItemStock] = []
-        self._fecha_descarga: Optional[datetime] = None
-        self._cache_expirado: bool = False
-        self._cargar_cache()
+        self._lock = threading.Lock()
+        # Fuente general
+        self._datos_general: dict[str, dict[str, dict]] = {}
+        self._items_general: list[ItemStock] = []
+        self._fecha_general: Optional[datetime] = None
+        # Fuente sucursales
+        self._datos_sucursales: dict[str, dict[str, dict]] = {}
+        self._items_sucursales: list[ItemStock] = []
+        self._fecha_sucursales: Optional[datetime] = None
+
+        self._cargar_cache(settings.cache_ruta, "general")
+        self._cargar_cache(settings.cache_ruta2, "sucursales")
 
     # ── Metodos publicos ────────────────────────────────────────────────
 
@@ -38,63 +66,70 @@ class ServicioStock:
         linea: Optional[str] = None,
         um: Optional[str] = None,
         categoria: Optional[str] = None,
+        fuente: str = "general",
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> StockResponse:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
-        return self._construir_respuesta(almacen, busqueda, linea, um, categoria, limit, offset)
+        self._refrescar_si_es_necesario(fuente)
+        items = self._obtener_items_segun_fuente(fuente)
+        return self._construir_respuesta(items, fuente, almacen, busqueda, linea, um, categoria, limit, offset)
 
-    def obtener_sku(self, sku: str) -> Optional[ItemStock]:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
-        for item in self._items:
+    def obtener_sku(self, sku: str, fuente: str = "general") -> Optional[ItemStock]:
+        self._refrescar_si_es_necesario(fuente)
+        items = self._obtener_items_segun_fuente(fuente)
+        for item in items:
             if item.sku == sku:
                 return item
         return None
 
     def obtener_resumen(self) -> ResumenStock:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
+        self._refrescar_si_es_necesario("general")
         return self._calcular_resumen()
 
     def obtener_health(self) -> HealthResponse:
+        ahora = datetime.now(timezone.utc)
+        valido = bool(self._fecha_general and ahora - self._fecha_general <= timedelta(seconds=settings.cache_ttl_segundos))
         return HealthResponse(
             status="ok",
-            timestamp=datetime.now(timezone.utc),
-            cache_skus=len(self._items),
-            cache_valido=not self._cache_expiro(),
+            timestamp=ahora,
+            cache_skus=len(self._items_general),
+            cache_valido=valido,
         )
 
-    def procesar_archivo_local(self, ruta: str) -> tuple[int, int]:
+    def procesar_archivo_local(self, ruta: str, fuente: str = "general") -> tuple[int, int]:
         datos = parsear_stock_desde_xls(ruta)
-        self._datos_crudos = datos
-        self._items = self._transformar_items(datos)
-        self._fecha_descarga = datetime.now(timezone.utc)
-        self._cache_expirado = False
-        self._guardar_cache()
+        if fuente == "sucursales":
+            self._datos_sucursales = datos
+            self._items_sucursales = self._transformar_items(datos)
+            self._fecha_sucursales = datetime.now(timezone.utc)
+            self._cache_expirado_sucursales = False
+            self._guardar_cache(settings.cache_ruta2, "sucursales")
+        else:
+            self._datos_general = datos
+            self._items_general = self._transformar_items(datos)
+            self._fecha_general = datetime.now(timezone.utc)
+            self._cache_expirado_general = False
+            self._guardar_cache(settings.cache_ruta, "general")
         almacenes = self._listar_almacenes(datos)
-        return len(self._items), len(almacenes)
+        return len(self._obtener_items_segun_fuente(fuente)), len(almacenes)
 
     def listar_almacenes(self) -> list[dict]:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
+        self._refrescar_si_es_necesario("general")
         almacenes_vistos: dict[str, int] = {}
-        for item in self._items:
+        for item in self._items_general:
             for alm in item.almacenes:
                 almacenes_vistos[alm.almacen] = (
                     almacenes_vistos.get(alm.almacen, 0) + 1
                 )
         return sorted(
-            [{"almacen": k, "total_skus": v} for k, v in almacenes_vistos.items()],
+            [{"almacen": k, "total_skus": v, "tipo": _tipo_almacen(k)} for k, v in almacenes_vistos.items()],
             key=lambda x: (0 if x["almacen"] == ALMACEN_PRINCIPAL else 1, x["almacen"]),
         )
 
     def listar_lineas(self) -> list[dict]:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
+        self._refrescar_si_es_necesario("general")
         lineas_vistas: dict[str, int] = {}
-        for item in self._items:
+        for item in self._items_general:
             if item.linea:
                 lineas_vistas[item.linea] = lineas_vistas.get(item.linea, 0) + 1
         return sorted(
@@ -103,10 +138,9 @@ class ServicioStock:
         )
 
     def listar_categorias(self) -> list[dict]:
-        if self._cache_expiro():
-            self._actualizar_desde_origen()
+        self._refrescar_si_es_necesario("general")
         cats: dict[str, dict] = {}
-        for item in self._items:
+        for item in self._items_general:
             cat = item.categoria or "SIN CATEGORIA"
             if cat not in cats:
                 cats[cat] = {"categoria": cat, "total_skus": 0, "lineas": set()}
@@ -123,38 +157,96 @@ class ServicioStock:
 
     # ── Metodos internos ────────────────────────────────────────────────
 
-    def _cache_expiro(self) -> bool:
-        if not self._fecha_descarga:
-            return True
-        edad = datetime.now(timezone.utc) - self._fecha_descarga
-        return edad > timedelta(seconds=settings.cache_ttl_segundos)
+    @staticmethod
+    def _es_momento_valido() -> bool:
+        ahora = datetime.now(LIMA_TZ)
+        if ahora.weekday() == 6:  # domingo
+            return False
+        return 7 <= ahora.hour < 23  # 7:00 a 22:59
 
-    def _actualizar_desde_origen(self) -> None:
-        try:
-            ruta = self._descargar_xls()
-            datos = parsear_stock_desde_xls(ruta)
-            self._datos_crudos = datos
-            self._items = self._transformar_items(datos)
-            self._fecha_descarga = datetime.now(timezone.utc)
-            self._cache_expirado = False
-            self._guardar_cache()
-            Path(ruta).unlink(missing_ok=True)
-        except Exception:
-            if not self._items:
-                raise RuntimeError(
-                    "No hay datos en cache y la descarga desde appweb fallo."
-                ) from None
-            self._fecha_descarga = datetime.now(timezone.utc)
-            self._cache_expirado = True
+    def _obtener_items_segun_fuente(self, fuente: str) -> list[ItemStock]:
+        if fuente == "sucursales":
+            return self._items_sucursales
+        if fuente == "todas":
+            return self._items_general + self._items_sucursales
+        return self._items_general
 
-    def _descargar_xls(self) -> str:
-        respuesta = httpx.get(
-            settings.source1_url,
-            headers=ENCABEZADOS_HTTP,
-            timeout=60,
-            follow_redirects=True,
-        )
-        respuesta.raise_for_status()
+    def _refrescar_si_es_necesario(self, fuente: str) -> None:
+        ahora = datetime.now(timezone.utc)
+        chequear = []
+        if fuente in ("general", "todas"):
+            chequear.append("general")
+        if fuente in ("sucursales", "todas"):
+            chequear.append("sucursales")
+        for f in chequear:
+            if f == "general":
+                fecha = self._fecha_general
+                hay_cache = bool(self._items_general)
+            else:
+                fecha = self._fecha_sucursales
+                hay_cache = bool(self._items_sucursales)
+
+            if not hay_cache:
+                self._actualizar_desde_origen(f)
+                continue
+
+            if not fecha:
+                edad = timedelta.max
+            else:
+                edad = ahora - fecha
+
+            if edad > timedelta(seconds=settings.cache_ttl_segundos) and self._es_momento_valido():
+                self._actualizar_desde_origen(f)
+
+    def _actualizar_desde_origen(self, fuente: str) -> None:
+        url = settings.source2_url if fuente == "sucursales" else settings.source1_url
+        cache_ruta = settings.cache_ruta2 if fuente == "sucursales" else settings.cache_ruta
+        with self._lock:
+            if fuente == "sucursales":
+                fecha = self._fecha_sucursales
+                hay_items = bool(self._items_sucursales)
+            else:
+                fecha = self._fecha_general
+                hay_items = bool(self._items_general)
+            # Si otro hilo ya refresco mientras esperabamos el lock, salir
+            if fecha and datetime.now(timezone.utc) - fecha < timedelta(seconds=settings.cache_ttl_segundos):
+                return
+            try:
+                ruta = self._descargar_xls(url)
+                datos = parsear_stock_desde_xls(ruta)
+                items = self._transformar_items(datos)
+                ahora = datetime.now(timezone.utc)
+                if fuente == "sucursales":
+                    self._datos_sucursales = datos
+                    self._items_sucursales = items
+                    self._fecha_sucursales = ahora
+                else:
+                    self._datos_general = datos
+                    self._items_general = items
+                    self._fecha_general = ahora
+                self._guardar_cache(cache_ruta, fuente)
+                Path(ruta).unlink(missing_ok=True)
+            except Exception:
+                if not hay_items:
+                    raise RuntimeError(
+                        f"No hay datos en cache y la descarga desde appweb fallo (fuente={fuente})."
+                    ) from None
+
+    def _descargar_xls(self, url: str) -> str:
+        for intento in range(2):
+            try:
+                respuesta = httpx.get(
+                    url,
+                    headers=ENCABEZADOS_HTTP,
+                    timeout=30,
+                    follow_redirects=True,
+                )
+                respuesta.raise_for_status()
+                break
+            except (httpx.TimeoutException, httpx.NetworkError) as e:
+                if intento == 1:
+                    raise  # reintentado una vez, fallo de nuevo
+                continue
         sufijo = self._inferir_extension(respuesta)
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=sufijo)
         tmp.write(respuesta.content)
@@ -182,6 +274,7 @@ class ServicioStock:
     ) -> list[ItemStock]:
         skus_unicos: dict[str, dict] = {}
         for almacen, productos in datos.items():
+            tipo_alm = _tipo_almacen(almacen)
             for sku, info in productos.items():
                 if sku not in skus_unicos:
                     linea_txt = info.get("linea", "")
@@ -198,12 +291,14 @@ class ServicioStock:
                 skus_unicos[sku]["almacenes"][almacen] = {
                     "stock": info.get("stock", 0) or 0,
                     "predespacho": info.get("predespacho", 0) or 0,
+                    "tipo": tipo_alm,
                 }
         items = []
         for sku, data in sorted(skus_unicos.items()):
             almacenes_lista = [
                 AlmacenStock(
                     almacen=alm,
+                    tipo=val["tipo"],
                     stock=val["stock"],
                     predespacho=val["predespacho"],
                     disponible=max(0, val["stock"] - val["predespacho"]),
@@ -230,6 +325,8 @@ class ServicioStock:
 
     def _construir_respuesta(
         self,
+        items: list[ItemStock],
+        fuente: str = "general",
         almacen: Optional[str] = None,
         busqueda: Optional[str] = None,
         linea: Optional[str] = None,
@@ -238,7 +335,6 @@ class ServicioStock:
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> StockResponse:
-        items = self._items
         if almacen:
             almacen_up = almacen.strip().upper()
             items = [
@@ -267,24 +363,35 @@ class ServicioStock:
         if limit is not None:
             items = items[offset:offset + limit]
 
+        fuente_label = {
+            "general": "General (VES, 40, 118...)",
+            "sucursales": "Sucursales (S1, S2, S3...)",
+            "todas": "General + Sucursales",
+        }.get(fuente, fuente)
+
+        ahora = datetime.now(timezone.utc)
+        ref_fecha = self._fecha_sucursales if fuente == "sucursales" else self._fecha_general
+        cache_expirado = bool(ref_fecha and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos))
         return StockResponse(
             metadata=MetadataStock(
-                fuente=settings.source1_url,
-                fecha_descarga=self._fecha_descarga,
+                fuente=fuente_label,
+                fecha_descarga=ref_fecha,
                 total_skus=total,
-                total_almacenes=len(self._listar_almacenes(self._datos_crudos)),
-                cache_expirado=self._cache_expirado,
+                total_almacenes=len(self._listar_almacenes(
+                    self._datos_sucursales if fuente == "sucursales" else self._datos_general
+                )),
+                cache_expirado=cache_expirado,
                 cache_expiro_en=settings.cache_ttl_segundos,
             ),
             items=items,
         )
 
     def _calcular_resumen(self) -> ResumenStock:
-        total = len(self._items)
+        total = len(self._items_general)
         con_stock = 0
         sin_stock = 0
         con_predespacho = 0
-        for item in self._items:
+        for item in self._items_general:
             tiene_disponible = any(a.disponible > 0 for a in item.almacenes)
             tiene_predespacho = any(a.predespacho > 0 for a in item.almacenes)
             if tiene_disponible:
@@ -307,33 +414,44 @@ class ServicioStock:
     def _listar_almacenes(datos: dict[str, dict[str, dict]]) -> list[str]:
         return sorted(datos.keys())
 
-    def _guardar_cache(self) -> None:
+    def _guardar_cache(self, ruta_cache: str, fuente: str) -> None:
+        ruta = Path(ruta_cache)
+        ruta_bak = ruta.with_suffix(ruta.suffix + ".bak")
         try:
-            ruta = Path(settings.cache_ruta)
             ruta.parent.mkdir(parents=True, exist_ok=True)
+            datos = self._datos_sucursales if fuente == "sucursales" else self._datos_general
+            fecha = self._fecha_sucursales if fuente == "sucursales" else self._fecha_general
             payload = {
-                "fecha_descarga": self._fecha_descarga.isoformat() if self._fecha_descarga else None,
-                "datos": self._datos_crudos,
+                "fecha_descarga": fecha.isoformat() if fecha else None,
+                "datos": datos,
             }
             ruta.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            shutil.copy2(str(ruta), str(ruta_bak))
         except OSError:
             pass
 
-    def _cargar_cache(self) -> None:
-        ruta = Path(settings.cache_ruta)
-        if not ruta.exists():
-            return
-        try:
-            payload = json.loads(ruta.read_text(encoding="utf-8"))
-            fecha_str = payload.get("fecha_descarga")
-            if fecha_str:
-                self._fecha_descarga = datetime.fromisoformat(fecha_str)
-            self._datos_crudos = payload.get("datos", {})
-            self._items = self._transformar_items(self._datos_crudos)
-        except (OSError, json.JSONDecodeError, ValueError):
-            self._fecha_descarga = None
-            self._datos_crudos = {}
-            self._items = []
+    def _cargar_cache(self, ruta_cache: str, fuente: str) -> None:
+        for ruta in (Path(ruta_cache), Path(ruta_cache).with_suffix(Path(ruta_cache).suffix + ".bak")):
+            if not ruta.exists():
+                continue
+            try:
+                payload = json.loads(ruta.read_text(encoding="utf-8"))
+                fecha_str = payload.get("fecha_descarga")
+                datos = payload.get("datos", {})
+                items = self._transformar_items(datos)
+                if fuente == "sucursales":
+                    if fecha_str:
+                        self._fecha_sucursales = datetime.fromisoformat(fecha_str)
+                    self._datos_sucursales = datos
+                    self._items_sucursales = items
+                else:
+                    if fecha_str:
+                        self._fecha_general = datetime.fromisoformat(fecha_str)
+                    self._datos_general = datos
+                    self._items_general = items
+                return  # exito
+            except (OSError, json.JSONDecodeError, ValueError):
+                continue  # intenta backup
 
 
 servicio_stock = ServicioStock()

@@ -7,8 +7,12 @@ services:
     envVars:
       - key: S1_SOURCE1_URL
         value: "http://appweb.cipsa.com.pe:8054/AlmacenStock/DownLoadFiles?value=%7B%22linea%22:%22%22,%22porLinea%22:%22tbLinea%22,%22grupo%22:%22%22,%22porGrupo%22:%22tbGrupo%22,%22tipo%22:%22%22,%22porTipo%22:%22tbTipo%22,%22familia%22:%22%22,%22porFamilia%22:%22tbFamilia%22,%22parametroX2%22:%22%22,%22parametroX1%22:%220%22%7D"
+      - key: S1_SOURCE2_URL
+        value: "http://appweb.cipsa.com.pe:8054/AlmacenStock/DownLoadFiles?value=%7B%22linea%22:%22%22,%22porLinea%22:%22tbLinea%22,%22grupo%22:%22%22,%22porGrupo%22:%22tbGrupo%22,%22tipo%22:%22%22,%22porTipo%22:%22tbTipo%22,%22familia%22:%22%22,%22porFamilia%22:%22tbFamilia%22,%22parametroX2%22:%221%22,%22parametroX1%22:%220%22%7D"
       - key: S1_CACHE_TTL_SEGUNDOS
-        value: "3600"
+        value: "900"
       - key: S1_CACHE_RUTA
         value: "data/stock_cache.json"
+      - key: S1_CACHE_RUTA2
+        value: "data/stock_cache_sucursales.json"
     healthCheckPath: /api/v1/health

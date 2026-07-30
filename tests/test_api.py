@@ -104,8 +104,8 @@ class TestConSample:
 
 class TestSinArchivo:
     def test_health_sin_datos(self):
-        servicio_stock._datos_crudos = {}
-        servicio_stock._items = []
+        servicio_stock._datos_general = {}
+        servicio_stock._items_general = []
         respuesta = client.get("/api/v1/health")
         assert respuesta.status_code == 200
         assert respuesta.json()["cache_skus"] == 0

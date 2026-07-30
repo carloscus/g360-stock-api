@@ -33,7 +33,7 @@ ALMACEN_PRINCIPAL: str = "VES"
 # coincida gana (se evaluan de mas especifico a menos especifico).
 
 CATEGORIAS: dict[str, list[str]] = {
-    "VINIBALL": ["0101", "01MA", "0114", "01AD", "0181"],
+    "VINIBALL": ["0101", "01MA", "0114", "01AD"],
     "VINIFAN": [
         "0102", "0109", "0111",
         "0172", "0173", "0175", "0176", "0177", "0178", "0179",
@@ -41,7 +41,7 @@ CATEGORIAS: dict[str, list[str]] = {
     ],
     "INDUMENTARIA": ["0157", "0152"],
     "REPRESENTADAS": ["0185"],
-    "PUBLICIDAD": ["0180"],
+    "PUBLICIDAD": ["0180", "0181"],
 }
 
 # Prefijos de linea para clasificacion automatica

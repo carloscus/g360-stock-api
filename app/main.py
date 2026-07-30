@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 
 from app.routers import health, stock, upload, resumen
 
@@ -25,6 +26,11 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/docs")
+
 
 app.add_middleware(
     CORSMiddleware,

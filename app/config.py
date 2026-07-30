@@ -8,7 +8,7 @@ class Settings(BaseSettings):
         "http://appweb.cipsa.com.pe:8054/AlmacenStock/DownLoadFiles"
         '?value={"linea":"","porLinea":"tbLinea","grupo":"","porGrupo":"tbGrupo","tipo":"","porTipo":"tbTipo","familia":"","porFamilia":"tbFamilia","parametroX2":"","parametroX1":"0"}'
     )
-    cache_ttl_segundos: int = 3600
+    cache_ttl_segundos: int = 900
     cache_ruta: str = "data/stock_cache.json"
     puerto: int = 8000
 

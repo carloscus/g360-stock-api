@@ -21,6 +21,7 @@ class ItemStock(BaseModel):
     grupo: str = Field(default="", description="Grupo de producto (solamente en formato completo)")
     tipo: str = Field(default="", description="Tipo de producto (solamente en formato completo)")
     familia: str = Field(default="", description="Familia de producto (solamente en formato completo)")
+    categoria: str = Field(default="", description="Categoria de negocio (VINIBALL, VINIFAN, etc.)")
     almacenes: list[AlmacenStock] = Field(
         default_factory=list,
         description="Desglose de stock por almacen",
@@ -30,10 +31,12 @@ class ItemStock(BaseModel):
 class MetadataStock(BaseModel):
     fuente: str = Field(..., description="URL o nombre de la fuente de datos")
     fecha_descarga: Optional[datetime] = Field(None, description="Momento de la ultima descarga")
-    total_skus: int = Field(0, description="Cantidad total de SKU unicos")
+    total_skus: int = Field(0, description="Cantidad total de SKU unicos (sin paginacion)")
     total_almacenes: int = Field(0, description="Cantidad de almacenes")
     cache_expirado: bool = Field(False, description="Indica si se sirvio cache vencido")
-    cache_expiro_en: int = Field(3600, description="TTL del cache en segundos")
+    cache_expiro_en: int = Field(900, description="TTL del cache en segundos")
+    offset: Optional[int] = Field(None, description="Offset aplicado en la paginacion")
+    limit: Optional[int] = Field(None, description="Limite aplicado en la paginacion")
 
 
 class StockResponse(BaseModel):

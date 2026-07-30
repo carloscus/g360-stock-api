@@ -9,7 +9,7 @@ from typing import Optional
 import httpx
 
 from app.config import settings
-from app.core.constants import ENCABEZADOS_HTTP, ALMACEN_PRINCIPAL
+from app.core.constants import ENCABEZADOS_HTTP, ALMACEN_PRINCIPAL, asignar_categoria
 from app.core.parsers import parsear_stock_desde_xls
 from app.models.schemas import (
     AlmacenStock,
@@ -37,10 +37,13 @@ class ServicioStock:
         busqueda: Optional[str] = None,
         linea: Optional[str] = None,
         um: Optional[str] = None,
+        categoria: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
     ) -> StockResponse:
         if self._cache_expiro():
             self._actualizar_desde_origen()
-        return self._construir_respuesta(almacen, busqueda, linea, um)
+        return self._construir_respuesta(almacen, busqueda, linea, um, categoria, limit, offset)
 
     def obtener_sku(self, sku: str) -> Optional[ItemStock]:
         if self._cache_expiro():
@@ -97,6 +100,25 @@ class ServicioStock:
         return sorted(
             [{"linea": k, "total_skus": v} for k, v in lineas_vistas.items()],
             key=lambda x: x["linea"],
+        )
+
+    def listar_categorias(self) -> list[dict]:
+        if self._cache_expiro():
+            self._actualizar_desde_origen()
+        cats: dict[str, dict] = {}
+        for item in self._items:
+            cat = item.categoria or "SIN CATEGORIA"
+            if cat not in cats:
+                cats[cat] = {"categoria": cat, "total_skus": 0, "lineas": set()}
+            cats[cat]["total_skus"] += 1
+            if item.linea:
+                cats[cat]["lineas"].add(item.linea)
+        return sorted(
+            [
+                {"categoria": v["categoria"], "total_skus": v["total_skus"], "lineas": sorted(v["lineas"])}
+                for v in cats.values()
+            ],
+            key=lambda x: x["categoria"],
         )
 
     # ── Metodos internos ────────────────────────────────────────────────
@@ -162,13 +184,15 @@ class ServicioStock:
         for almacen, productos in datos.items():
             for sku, info in productos.items():
                 if sku not in skus_unicos:
+                    linea_txt = info.get("linea", "")
                     skus_unicos[sku] = {
                         "descripcion": info.get("descripcion", ""),
                         "um": info.get("um", ""),
-                        "linea": info.get("linea", ""),
+                        "linea": linea_txt,
                         "grupo": info.get("grupo", ""),
                         "tipo": info.get("tipo", ""),
                         "familia": info.get("familia", ""),
+                        "categoria": asignar_categoria(linea_txt),
                         "almacenes": {},
                     }
                 skus_unicos[sku]["almacenes"][almacen] = {
@@ -198,6 +222,7 @@ class ServicioStock:
                     grupo=data["grupo"],
                     tipo=data["tipo"],
                     familia=data["familia"],
+                    categoria=data["categoria"],
                     almacenes=almacenes_lista,
                 )
             )
@@ -209,6 +234,9 @@ class ServicioStock:
         busqueda: Optional[str] = None,
         linea: Optional[str] = None,
         um: Optional[str] = None,
+        categoria: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
     ) -> StockResponse:
         items = self._items
         if almacen:
@@ -231,11 +259,19 @@ class ServicioStock:
         if um:
             q = um.strip().upper()
             items = [item for item in items if item.um == q]
+        if categoria:
+            q = categoria.strip().upper()
+            items = [item for item in items if item.categoria == q]
+
+        total = len(items)
+        if limit is not None:
+            items = items[offset:offset + limit]
+
         return StockResponse(
             metadata=MetadataStock(
                 fuente=settings.source1_url,
                 fecha_descarga=self._fecha_descarga,
-                total_skus=len(items),
+                total_skus=total,
                 total_almacenes=len(self._listar_almacenes(self._datos_crudos)),
                 cache_expirado=self._cache_expirado,
                 cache_expiro_en=settings.cache_ttl_segundos,

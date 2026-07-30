@@ -15,7 +15,7 @@ router = APIRouter(tags=["stock"])
     response_model=StockResponse,
     summary="Listar stock de todos los productos",
     description="Obtiene el stock consolidado desde la fuente S1 (appweb.cipsa.com.pe). "
-    "Acepta filtros opcionales por almacen y busqueda de texto.",
+    "Acepta filtros opcionales, paginacion y categorizacion.",
 )
 def listar_stock(
     almacen: Optional[str] = Query(
@@ -28,14 +28,32 @@ def listar_stock(
     ),
     linea: Optional[str] = Query(
         None,
-        description="Filtrar por linea de producto (ej: HERRAMIENTAS, MAQUINAS)",
+        description="Filtrar por linea de producto (ej: PELOTAS, FORROS)",
     ),
     um: Optional[str] = Query(
         None,
         description="Filtrar por unidad de medida (ej: UND, BST, KGR, CJA)",
     ),
+    categoria: Optional[str] = Query(
+        None,
+        description="Filtrar por categoria de negocio (ej: VINIBALL, VINIFAN, INDUSTRIAL)",
+    ),
+    limit: Optional[int] = Query(
+        None,
+        description="Maximo de items a retornar (paginacion). Ej: 100",
+        ge=1,
+        le=5000,
+    ),
+    offset: int = Query(
+        0,
+        description="Numero de items a saltar (paginacion). Ej: 100",
+        ge=0,
+    ),
 ) -> StockResponse:
-    return servicio_stock.obtener_stock(almacen=almacen, busqueda=search, linea=linea, um=um)
+    return servicio_stock.obtener_stock(
+        almacen=almacen, busqueda=search, linea=linea, um=um,
+        categoria=categoria, limit=limit, offset=offset,
+    )
 
 
 @router.get(
@@ -73,3 +91,13 @@ def listar_almacenes():
 )
 def listar_lineas():
     return servicio_stock.listar_lineas()
+
+
+@router.get(
+    "/api/v1/categorias",
+    summary="Listar categorias de negocio",
+    description="Devuelve la lista de categorias de negocio con las lineas "
+    "que las componen y la cantidad de SKU en cada una.",
+)
+def listar_categorias():
+    return servicio_stock.listar_categorias()

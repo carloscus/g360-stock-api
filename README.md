@@ -159,12 +159,23 @@ Variables de entorno (prefix `S1_`):
 
 | Variable | Default | Descripcion |
 |----------|---------|-------------|
+| `S1_API_KEY` | `""` | API Key para proteger endpoints. Vacío = sin auth |
 | `S1_SOURCE1_URL` | URL appweb | Fuente general (parametroX2="") |
 | `S1_SOURCE2_URL` | URL appweb | Fuente sucursales (parametroX2=1) |
 | `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache en segundos (15 min) |
 | `S1_CACHE_RUTA` | `data/stock_cache.json` | Cache de fuente general |
 | `S1_CACHE_RUTA2` | `data/stock_cache_sucursales.json` | Cache de fuente sucursales |
 | `S1_PUERTO` | `8000` | Puerto del servidor |
+
+### Autenticacion (opcional)
+
+Si se configura `S1_API_KEY`, todos los endpoints requieren el header:
+
+```
+X-API-Key: tu-clave-secreta
+```
+
+Sin el header o con clave incorrecta → `403 Forbidden`. Si `S1_API_KEY` esta vacio (default), la API es abierta.
 
 ## Desarrollo
 

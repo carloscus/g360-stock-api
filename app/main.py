@@ -2,11 +2,20 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from fastapi.security import APIKeyHeader
 
+from app.config import settings
 from app.routers import health, stock, upload, resumen
+
+api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def verificar_api_key(api_key: str = Depends(api_key_header)) -> None:
+    if settings.api_key and api_key != settings.api_key:
+        raise HTTPException(status_code=403, detail="API Key invalida")
 
 
 @asynccontextmanager
@@ -40,7 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health.router)
-app.include_router(stock.router)
-app.include_router(upload.router)
-app.include_router(resumen.router)
+app.include_router(health.router, dependencies=[Depends(verificar_api_key)])
+app.include_router(stock.router, dependencies=[Depends(verificar_api_key)])
+app.include_router(upload.router, dependencies=[Depends(verificar_api_key)])
+app.include_router(resumen.router, dependencies=[Depends(verificar_api_key)])

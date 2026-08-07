@@ -110,6 +110,27 @@ class TestCatalogUpload:
         assert "un_bx" in item
         assert "precio" in item
         assert "ean13" in item
+        assert "estado_linea" in item
+
+        # Limpiar
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+    @pytest.mark.skipif(not RUTA_CATALOGO.exists(), reason="No hay archivo de catalogo")
+    def test_sku_con_enrich(self):
+        """Verificar que /stock/{sku}?enrich=true retorna campos del catalogo."""
+        import json as _json
+        with open(RUTA_CATALOGO, encoding="utf-8") as f:
+            data = _json.load(f)
+        catalog_service.cargar_desde_json(data)
+
+        sku_ejemplo = data["productos"][0]["sku"]
+        respuesta = client.get(f"/api/v1/stock/{sku_ejemplo}", params={"enrich": "true"})
+        assert respuesta.status_code == 200
+        item = respuesta.json()
+        assert item["sku"] == sku_ejemplo
+        assert "un_bx" in item
+        assert "estado_linea" in item
 
         # Limpiar
         catalog_service._catalog = {}

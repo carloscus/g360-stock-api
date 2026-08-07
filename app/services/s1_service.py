@@ -119,6 +119,7 @@ class ServicioStock:
                     nombre_corto=cat.get("nombre_corto", ""),
                     ean13=cat.get("ean13", ""),
                     ean14=cat.get("ean14", ""),
+                    estado_linea=cat.get("estado_linea", ""),
                     keywords=cat.get("keywords", []),
                     almacenes=item.almacenes,
                 ))
@@ -138,6 +139,7 @@ class ServicioStock:
                     nombre_corto="",
                     ean13="",
                     ean14="",
+                    estado_linea="",
                     keywords=[],
                     almacenes=item.almacenes,
                 ))

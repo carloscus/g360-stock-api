@@ -33,6 +33,7 @@ class ItemStockEnriched(ItemStock):
     nombre_corto: str = Field(default="", description="Nombre corto generado")
     ean13: str = Field(default="", description="Codigo de barras EAN-13")
     ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
+    estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO, TRADICIONAL)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
 
 

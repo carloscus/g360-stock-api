@@ -36,10 +36,10 @@ def listar_stock(
 
 @router.get(
     "/api/v1/stock/{sku}",
-    response_model=ItemStock,
+    response_model=ItemStock | ItemStockEnriched,
     summary="Obtener detalle de un SKU",
     description="Busca un producto por su codigo SKU y devuelve su detalle "
-    "con desglose por almacen.",
+    "con desglose por almacen. Usar ?enrich=true para incluir datos del catalogo.",
 )
 def obtener_sku(
     sku: str,

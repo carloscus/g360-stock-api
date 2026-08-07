@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.schemas import ItemStock, StockResponse
+from app.models.schemas import ItemStock, ItemStockEnriched, StockResponse, StockEnrichedResponse
 from app.services.s1_service import servicio_stock
 
 router = APIRouter(tags=["stock"])
@@ -12,51 +12,25 @@ router = APIRouter(tags=["stock"])
 
 @router.get(
     "/api/v1/stock",
-    response_model=StockResponse,
     summary="Listar stock de todos los productos",
     description="Obtiene el stock consolidado desde la fuente S1 (appweb.cipsa.com.pe). "
-    "Acepta filtros opcionales, paginacion y categorizacion.",
+                "Acepta filtros opcionales, paginacion y categorizacion. "
+                "Usar ?enrich=true para incluir datos del catalogo (un_bx, peso, precio, ean).",
 )
 def listar_stock(
-    almacen: Optional[str] = Query(
-        None,
-        description="Filtrar por codigo de almacen (ej: VES, 40, 118)",
-    ),
-    search: Optional[str] = Query(
-        None,
-        description="Buscar por SKU o descripcion del producto",
-    ),
-    linea: Optional[str] = Query(
-        None,
-        description="Filtrar por linea de producto (ej: PELOTAS, FORROS)",
-    ),
-    um: Optional[str] = Query(
-        None,
-        description="Filtrar por unidad de medida (ej: UND, BST, KGR, CJA)",
-    ),
-    categoria: Optional[str] = Query(
-        None,
-        description="Filtrar por categoria de negocio (ej: VINIBALL, VINIFAN, INDUSTRIAL)",
-    ),
-    fuente: str = Query(
-        "general",
-        description="Fuente de datos: general (VES, 40, 118...), sucursales (S1, S2...), todas",
-    ),
-    limit: Optional[int] = Query(
-        None,
-        description="Maximo de items a retornar (paginacion). Ej: 100",
-        ge=1,
-        le=5000,
-    ),
-    offset: int = Query(
-        0,
-        description="Numero de items a saltar (paginacion). Ej: 100",
-        ge=0,
-    ),
-) -> StockResponse:
+    almacen: Optional[str] = Query(None, description="Filtrar por codigo de almacen (ej: VES, 40, 118)"),
+    search: Optional[str] = Query(None, description="Buscar por SKU o descripcion del producto"),
+    linea: Optional[str] = Query(None, description="Filtrar por linea de producto (ej: PELOTAS, FORROS)"),
+    um: Optional[str] = Query(None, description="Filtrar por unidad de medida (ej: UND, BST, KGR, CJA)"),
+    categoria: Optional[str] = Query(None, description="Filtrar por categoria de negocio (ej: VINIBALL, VINIFAN)"),
+    fuente: str = Query("general", description="Fuente de datos: general, sucursales, todas"),
+    limit: Optional[int] = Query(None, description="Maximo de items (paginacion). Ej: 100", ge=1, le=5000),
+    offset: int = Query(0, description="Items a saltar (paginacion). Ej: 100", ge=0),
+    enrich: bool = Query(False, description="Incluir datos del catalogo (un_bx, peso, precio, ean13, ean14)"),
+):
     return servicio_stock.obtener_stock(
         almacen=almacen, busqueda=search, linea=linea, um=um,
-        categoria=categoria, fuente=fuente, limit=limit, offset=offset,
+        categoria=categoria, fuente=fuente, limit=limit, offset=offset, enrich=enrich,
     )
 
 
@@ -73,8 +47,15 @@ def obtener_sku(
         "general",
         description="Fuente de datos: general, sucursales, todas",
     ),
-) -> ItemStock:
-    item = servicio_stock.obtener_sku(sku.strip().upper(), fuente=fuente)
+    enrich: bool = Query(
+        False,
+        description="Enriquecer con datos del catalogo",
+    ),
+) -> ItemStock | ItemStockEnriched:
+    if enrich:
+        item = servicio_stock.obtener_sku_enriched(sku.strip().upper(), fuente=fuente)
+    else:
+        item = servicio_stock.obtener_sku(sku.strip().upper(), fuente=fuente)
     if not item:
         raise HTTPException(
             status_code=404,

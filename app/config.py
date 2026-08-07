@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     cache_ruta: str = "data/stock_cache.json"
     cache_ruta2: str = "data/stock_cache_sucursales.json"
     puerto: int = 8000
+    # Catalogo maestro
+    catalogo_ruta: str = "data/catalog_cache.json"
+    catalogo_ttl_segundos: int = 21600  # 6 horas
 
     model_config = {"env_file": ".env", "env_prefix": "S1_"}
 

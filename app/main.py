@@ -8,7 +8,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyHeader
 
 from app.config import settings
-from app.routers import health, stock, upload, resumen
+from app.routers import health, stock, upload, resumen, catalog
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -53,3 +53,4 @@ app.include_router(health.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(stock.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(upload.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(resumen.router, dependencies=[Depends(verificar_api_key)])
+app.include_router(catalog.router, dependencies=[Depends(verificar_api_key)])

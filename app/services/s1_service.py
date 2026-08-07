@@ -22,11 +22,14 @@ from app.core.parsers import parsear_stock_desde_xls
 from app.models.schemas import (
     AlmacenStock,
     ItemStock,
+    ItemStockEnriched,
     MetadataStock,
     StockResponse,
+    StockEnrichedResponse,
     ResumenStock,
     HealthResponse,
 )
+from app.services.catalog_service import catalog_service
 
 
 LIMA_TZ = timezone(timedelta(hours=-5))
@@ -69,10 +72,14 @@ class ServicioStock:
         fuente: str = "general",
         limit: Optional[int] = None,
         offset: int = 0,
-    ) -> StockResponse:
+        enrich: bool = False,
+    ) -> StockResponse | StockEnrichedResponse:
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_items_segun_fuente(fuente)
-        return self._construir_respuesta(items, fuente, almacen, busqueda, linea, um, categoria, limit, offset)
+        if enrich and catalog_service.cargado:
+            items_enriched = self._enriquecer_items(items)
+            return self._construir_respuesta(items_enriched, fuente, almacen, busqueda, linea, um, categoria, limit, offset, enrich=True)
+        return self._construir_respuesta(items, fuente, almacen, busqueda, linea, um, categoria, limit, offset, enrich=False)
 
     def obtener_sku(self, sku: str, fuente: str = "general") -> Optional[ItemStock]:
         self._refrescar_si_es_necesario(fuente)
@@ -81,6 +88,60 @@ class ServicioStock:
             if item.sku == sku:
                 return item
         return None
+
+    def obtener_sku_enriched(self, sku: str, fuente: str = "general") -> Optional[ItemStockEnriched]:
+        self._refrescar_si_es_necesario(fuente)
+        items = self._obtener_items_segun_fuente(fuente)
+        items_enriched = self._enriquecer_items(items)
+        for item in items_enriched:
+            if item.sku == sku:
+                return item
+        return None
+
+    def _enriquecer_items(self, items: list[ItemStock]) -> list[ItemStockEnriched]:
+        """Merge stock items with catalog data."""
+        enriched = []
+        for item in items:
+            cat = catalog_service.buscar(item.sku)
+            if cat:
+                enriched.append(ItemStockEnriched(
+                    sku=item.sku,
+                    descripcion=item.descripcion,
+                    um=item.um,
+                    linea=item.linea,
+                    grupo=item.grupo,
+                    tipo=item.tipo,
+                    familia=item.familia,
+                    categoria=item.categoria,
+                    un_bx=cat.get("un_bx", 1),
+                    peso_kg=cat.get("peso_kg", 0.0),
+                    precio=cat.get("precio", 0.0),
+                    nombre_corto=cat.get("nombre_corto", ""),
+                    ean13=cat.get("ean13", ""),
+                    ean14=cat.get("ean14", ""),
+                    keywords=cat.get("keywords", []),
+                    almacenes=item.almacenes,
+                ))
+            else:
+                enriched.append(ItemStockEnriched(
+                    sku=item.sku,
+                    descripcion=item.descripcion,
+                    um=item.um,
+                    linea=item.linea,
+                    grupo=item.grupo,
+                    tipo=item.tipo,
+                    familia=item.familia,
+                    categoria=item.categoria,
+                    un_bx=1,
+                    peso_kg=0.0,
+                    precio=0.0,
+                    nombre_corto="",
+                    ean13="",
+                    ean14="",
+                    keywords=[],
+                    almacenes=item.almacenes,
+                ))
+        return enriched
 
     def obtener_resumen(self) -> ResumenStock:
         self._refrescar_si_es_necesario("general")
@@ -334,7 +395,8 @@ class ServicioStock:
         categoria: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
-    ) -> StockResponse:
+        enrich: bool = False,
+    ) -> StockResponse | StockEnrichedResponse:
         if almacen:
             almacen_up = almacen.strip().upper()
             items = [
@@ -372,6 +434,25 @@ class ServicioStock:
         ahora = datetime.now(timezone.utc)
         ref_fecha = self._fecha_sucursales if fuente == "sucursales" else self._fecha_general
         cache_expirado = bool(ref_fecha and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos))
+
+        if enrich:
+            return StockEnrichedResponse(
+                metadata=MetadataStock(
+                    fuente=fuente_label,
+                    fecha_descarga=ref_fecha,
+                    total_skus=total,
+                    total_almacenes=len(self._listar_almacenes(
+                        self._datos_sucursales if fuente == "sucursales" else self._datos_general
+                    )),
+                    cache_expirado=cache_expirado,
+                    cache_expiro_en=settings.cache_ttl_segundos,
+                    offset=offset,
+                    limit=limit,
+                    enriquecido=True,
+                ),
+                items=list(items),
+            )
+
         return StockResponse(
             metadata=MetadataStock(
                 fuente=fuente_label,
@@ -382,6 +463,8 @@ class ServicioStock:
                 )),
                 cache_expirado=cache_expirado,
                 cache_expiro_en=settings.cache_ttl_segundos,
+                offset=offset,
+                limit=limit,
             ),
             items=items,
         )

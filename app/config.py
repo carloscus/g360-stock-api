@@ -20,6 +20,10 @@ class Settings(BaseSettings):
     # Catalogo maestro
     catalogo_ruta: str = "data/catalog_cache.json"
     catalogo_ttl_segundos: int = 21600  # 6 horas
+    # Fuente remota del catalogo (para auto-cargar cuando el disco es efimero, ej: Render free)
+    catalogo_raw_url: str = (
+        "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"
+    )
 
     model_config = {"env_file": ".env", "env_prefix": "S1_"}
 

@@ -135,3 +135,62 @@ class TestCatalogUpload:
         # Limpiar
         catalog_service._catalog = {}
         catalog_service._fecha_carga = None
+
+
+class TestCargarDesdeUrl:
+    def test_cargar_desde_url_exitoso(self, monkeypatch):
+        """Cargar_desde_url debe descargar y cargar un catalogo valido."""
+        import httpx
+
+        payload = {
+            "productos": [
+                {"sku": "011019", "un_bx": 60, "peso_kg": 0.2, "precio": 9.16, "estado_linea": "NACIONAL"},
+                {"sku": "011028", "un_bx": 12, "peso_kg": 0.3, "precio": 11.5, "estado_linea": "NACIONAL"},
+            ]
+        }
+
+        class FakeResponse:
+            def raise_for_status(self):
+                pass
+
+            def json(self):
+                return payload
+
+        def fake_get(url, timeout=30):
+            assert "catalogo_productos.json" in url
+            return FakeResponse()
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+        resultado = catalog_service.cargar_desde_url("https://example.com/catalogo_productos.json")
+        assert resultado["ok"] is True
+        assert resultado["total_skus"] == 2
+        assert catalog_service.cargado
+        assert catalog_service.buscar("011019")["un_bx"] == 60
+
+        # Limpiar
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+    def test_cargar_desde_url_falla(self, monkeypatch):
+        """Si la descarga falla, no debe romper y reporta error."""
+        import httpx
+
+        class FakeError(Exception):
+            pass
+
+        def fake_get(url, timeout=30):
+            raise httpx.NetworkError("sin red", request=None)
+
+        monkeypatch.setattr(httpx, "get", fake_get)
+
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+        resultado = catalog_service.cargar_desde_url("https://example.com/catalogo_productos.json")
+        assert resultado["ok"] is False
+        assert "error" in resultado
+        assert not catalog_service.cargado

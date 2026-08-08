@@ -8,7 +8,6 @@ import json
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
 
 from app.config import settings
 
@@ -19,7 +18,7 @@ class CatalogService:
     def __init__(self):
         self._lock = threading.Lock()
         self._catalog: dict[str, dict] = {}
-        self._fecha_carga: Optional[datetime] = None
+        self._fecha_carga: datetime | None = None
         self._ruta_cache = Path(settings.catalogo_ruta)
 
         # Cargar al iniciar
@@ -73,9 +72,24 @@ class CatalogService:
             return True
         return (datetime.now(timezone.utc) - self._fecha_carga) > timedelta(seconds=settings.catalogo_ttl_segundos)
 
-    def buscar(self, sku: str) -> Optional[dict]:
+    def buscar(self, sku: str) -> dict | None:
         """Busca un SKU en el catálogo."""
         return self._catalog.get(sku.strip().upper())
+
+    def cargar_desde_url(self, url: str) -> dict:
+        """Descarga el catalogo desde una URL remota y lo carga en memoria."""
+        import httpx
+
+        try:
+            respuesta = httpx.get(url, timeout=30)
+            respuesta.raise_for_status()
+            data = respuesta.json()
+        except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError, json.JSONDecodeError) as e:
+            return {"ok": False, "error": f"No se pudo descargar el catalogo: {e}", "total_skus": 0}
+
+        resultado = self.cargar_desde_json(data)
+        resultado["ok"] = True
+        return resultado
 
     def cargar_desde_json(self, data: dict) -> dict:
         """Carga un catálogo desde un dict (usado por upload)."""

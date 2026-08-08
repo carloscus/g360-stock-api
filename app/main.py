@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyHeader
 
 from app.config import settings
-from app.routers import health, stock, upload, resumen, catalog
+from app.routers import catalog, health, resumen, stock, upload
+from app.services.catalog_service import catalog_service
 
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
@@ -20,6 +22,19 @@ def verificar_api_key(api_key: str = Depends(api_key_header)) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Si el disco es efimero (Render free), el catalogo se pierde en cada
+    # reinicio. Auto-cargarlo desde la fuente remota para nunca quedar vacio.
+    if not catalog_service.cargado:
+        try:
+            resultado = await asyncio.to_thread(
+                catalog_service.cargar_desde_url, settings.catalogo_raw_url
+            )
+            if resultado.get("ok"):
+                print(f"[catalog] auto-cargado desde raw: {resultado.get('total_skus')} SKUs")
+            else:
+                print(f"[catalog] auto-carga fallo: {resultado.get('error')}")
+        except (OSError, RuntimeError) as e:
+            print(f"[catalog] auto-carga fallo inesperado: {e}")
     yield
 
 

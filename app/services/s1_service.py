@@ -48,6 +48,16 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
     return None
 
 
+def _normalizar_linea(linea: str) -> str:
+    """Normalize line format: '0101 - PELOTAS' -> '01 - PELOTAS'."""
+    if not linea:
+        return ""
+    match = re.match(r'^(\d{2}[A-Z]{0,2})\s*-\s*(.+)$', linea)
+    if match:
+        return f"{match.group(1)} - {match.group(2).strip()}"
+    return linea
+
+
 def _tipo_almacen(codigo: str) -> str:
     if codigo in ALMACENES_VENTA:
         return "venta"
@@ -117,6 +127,7 @@ class ServicioStock:
         for item in items:
             cat = catalog_service.buscar(item.sku)
             linea_id = _extraer_linea_id(item.linea)
+            sin_catalogo = cat is None
             if cat:
                 enriched.append(ItemStockEnriched(
                     sku=item.sku,
@@ -133,10 +144,11 @@ class ServicioStock:
                     nombre_corto=cat.get("nombre_corto", ""),
                     ean13=cat.get("ean13", ""),
                     ean14=cat.get("ean14", ""),
-                    estado_linea=cat.get("estado_linea", ""),
+                    estado_linea=cat.get("estado_linea", item.estado_linea or ""),
                     keywords=cat.get("keywords", []),
                     orden=cat.get("orden", 0),
                     linea_id=linea_id,
+                    sin_catalogo=False,
                     almacenes=item.almacenes,
                 ))
             else:
@@ -155,10 +167,11 @@ class ServicioStock:
                     nombre_corto="",
                     ean13="",
                     ean14="",
-                    estado_linea="",
+                    estado_linea=item.estado_linea or "",
                     keywords=[],
                     orden=0,
                     linea_id=linea_id,
+                    sin_catalogo=True,
                     almacenes=item.almacenes,
                 ))
         return enriched
@@ -359,14 +372,16 @@ class ServicioStock:
             for sku, info in productos.items():
                 if sku not in skus_unicos:
                     linea_txt = info.get("linea", "")
+                    linea_norm = _normalizar_linea(linea_txt)
                     skus_unicos[sku] = {
                         "descripcion": info.get("descripcion", ""),
                         "um": info.get("um", ""),
-                        "linea": linea_txt,
+                        "linea": linea_norm,
+                        "linea_id": _extraer_linea_id(linea_norm),
                         "grupo": info.get("grupo", ""),
                         "tipo": info.get("tipo", ""),
                         "familia": info.get("familia", ""),
-                        "categoria": asignar_categoria(linea_txt),
+                        "categoria": asignar_categoria(linea_norm),
                         "almacenes": {},
                     }
                 skus_unicos[sku]["almacenes"][almacen] = {
@@ -400,6 +415,11 @@ class ServicioStock:
                     familia=data["familia"],
                     categoria=data["categoria"],
                     almacenes=almacenes_lista,
+                    estado_linea="",
+                    cantidad_por_caja=0,
+                    precio_lista=0.0,
+                    linea_id=data["linea_id"],
+                    sin_catalogo=False,
                 )
             )
         return items

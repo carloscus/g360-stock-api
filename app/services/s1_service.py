@@ -121,6 +121,7 @@ class ServicioStock:
                     ean14=cat.get("ean14", ""),
                     estado_linea=cat.get("estado_linea", ""),
                     keywords=cat.get("keywords", []),
+                    orden=cat.get("orden", 0),
                     almacenes=item.almacenes,
                 ))
             else:

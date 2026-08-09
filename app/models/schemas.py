@@ -35,6 +35,7 @@ class ItemStockEnriched(ItemStock):
     ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
     estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO, TRADICIONAL)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
+    orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
 
 
 class MetadataStock(BaseModel):

@@ -18,12 +18,17 @@ class ItemStock(BaseModel):
     sku: str = Field(..., description="Codigo unico del producto")
     descripcion: str = Field(default="", description="Nombre o descripcion del producto")
     um: str = Field(default="", description="Unidad de medida (UND, BST, KGR, etc.)")
-    linea: str = Field(default="", description="Linea de producto")
+    linea: str = Field(default="", description="Linea de producto (formato: '01 - PELOTAS')")
     grupo: str = Field(default="", description="Grupo de producto")
     tipo: str = Field(default="", description="Tipo de producto")
     familia: str = Field(default="", description="Familia de producto")
     categoria: str = Field(default="", description="Categoria de negocio (VINIBALL, VINIFAN, REPRESENTADAS)")
     almacenes: list[AlmacenStock] = Field(default_factory=list)
+    estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO)")
+    cantidad_por_caja: int = Field(0, description="Unidades por caja (un_bx)")
+    precio_lista: float = Field(0.0, description="Precio de lista")
+    linea_id: Optional[str] = Field(None, description="Short line identifier (e.g. '01', 'AD', '78')")
+    sin_catalogo: bool = Field(False, description="True si el producto no tiene datos de catalogo maestro")
 
 
 class ItemStockEnriched(ItemStock):
@@ -37,6 +42,7 @@ class ItemStockEnriched(ItemStock):
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
     linea_id: Optional[str] = Field(None, description="Short line identifier extracted from linea code (e.g. '01' from '0101 - PELOTAS', 'AD' from '01AD - ACCESORIOS DEPORTIVOS')")
+    sin_catalogo: bool = Field(False, description="True si el producto no tiene datos de catalogo maestro")
 
 
 class MetadataStock(BaseModel):

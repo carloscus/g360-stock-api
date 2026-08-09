@@ -38,7 +38,8 @@ LIMA_TZ = timezone(timedelta(hours=-5))
 
 def _extraer_linea_id(linea: str) -> Optional[str]:
     """Extract short line ID from linea code.
-    Works with both formats: '0101 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD'
+    Works with both formats: '01 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD'
+    Also handles original: '0101 - PELOTAS' -> '01'
     """
     if not linea:
         return None
@@ -47,9 +48,12 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
     if match:
         return match.group(1)
     # Fallback: original format '0101 - PELOTAS'
-    match = re.match(r'^(01[0-9A-Z]+) -', linea)
+    match = re.match(r'^01([0-9A-Z]+)\s*-', linea)
     if match:
-        return match.group(1)[2:]
+        suffix = match.group(1)
+        if suffix and suffix[0].isdigit():
+            return suffix[:2]
+        return suffix
     return None
 
 

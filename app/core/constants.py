@@ -37,33 +37,33 @@ ALMACENES_INFORMATIVO: set[str] = {"118"}
 # coincida gana (se evaluan de mas especifico a menos especifico).
 
 CATEGORIAS: dict[str, list[str]] = {
-    "VINIBALL": ["0101", "01MA", "0114", "01AD"],
+    "VINIBALL": ["01", "MA", "14", "AD"],
     "VINIFAN": [
-        "0102", "0109", "0111",
-        "0172", "0173", "0175", "0176", "0177", "0178", "0179",
-        "01CE", "01CF",
+        "02", "09", "11",
+        "72", "73", "75", "76", "77", "78", "79",
+        "CE", "CF",
     ],
-    "INDUMENTARIA": ["0157", "0152"],
-    "REPRESENTADAS": ["0185"],
-    "PUBLICIDAD": ["0180", "0181"],
+    "INDUMENTARIA": ["57", "52"],
+    "REPRESENTADAS": ["85"],
+    "PUBLICIDAD": ["80", "81"],
 }
 
-# Prefijos de linea para clasificacion automatica
+# Prefijos de linea para clasificacion automatica (formato normalizado: sin prefijo '01')
 # (mas especifico primero, menos especifico despues)
 PREFIJOS_CATEGORIA_AUTO: list[tuple[str, str]] = [
-    ("0120", "INDUSTRIAL"),
-    ("0121", "INDUSTRIAL"),
-    ("0123", "INDUSTRIAL"),
-    ("0130", "CIPTECH"),
-    ("0131", "CIPTECH"),
-    ("0133", "CIPTECH"),
-    ("0135", "CIPTECH"),
-    ("0140", "MATERIALES"),
-    ("0150", "MATERIALES"),
-    ("0160", "DESCARTE Y VARIOS"),
-    ("0165", "DESCARTE Y VARIOS"),
-    ("0170", "PRODUCCION"),
-    ("0198", "DESCARTE Y VARIOS"),
+    ("20", "INDUSTRIAL"),
+    ("21", "INDUSTRIAL"),
+    ("23", "INDUSTRIAL"),
+    ("30", "CIPTECH"),
+    ("31", "CIPTECH"),
+    ("33", "CIPTECH"),
+    ("35", "CIPTECH"),
+    ("40", "MATERIALES"),
+    ("50", "MATERIALES"),
+    ("60", "DESCARTE Y VARIOS"),
+    ("65", "DESCARTE Y VARIOS"),
+    ("70", "PRODUCCION"),
+    ("98", "DESCARTE Y VARIOS"),
 ]
 
 CATEGORIA_DEFAULT: str = "OTROS"

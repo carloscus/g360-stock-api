@@ -30,27 +30,76 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 | `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles |
 | `GET` | `/api/v1/lineas` | Lista de lineas de producto |
 | `GET` | `/api/v1/categorias` | Lista de categorias de negocio con sus lineas |
-| `POST` | `/api/v1/upload` | Subir archivo .xls manualmente |
+| `POST` | `/api/v1/catalog/upload` | Subir catalogo maestro JSON |
 
-### Filtros de GET /api/v1/stock
+### Parametros de GET /api/v1/stock
 
 | Parametro | Tipo | Ejemplo | Descripcion |
 |-----------|------|---------|-------------|
+| `key` | string | `cipsa2026` | API Key (obligatorio) |
 | `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen |
 | `search` | string | `CRACKCITO` | Buscar por SKU o descripcion |
-| `linea` | string | `0101`, `PELOTAS`, `78` | Filtrar por linea (tolerante: `78` → `0178`) |
+| `linea` | string | `01`, `PELOTAS`, `78` | Filtrar por linea (tolerante) |
 | `categoria` | string | `VINIBALL`, `VINIFAN` | Filtrar por categoria de negocio |
 | `um` | string | `UND`, `KGR`, `BST` | Filtrar por unidad de medida |
 | `fuente` | string | `general`, `sucursales`, `todas` | Fuente de datos (default: `general`) |
 | `limit` | int | `100` | Maximo de items a retornar |
 | `offset` | int | `100` | Paginacion |
+| `enrich` | bool | `true` | Incluir datos del catalogo maestro |
+
+### Formato de respuesta
+
+**Base** (`?enrich=false`): Campos basicos de stock + `linea_id`, `sin_catalogo`
+
+```json
+{
+  "sku": "011019",
+  "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
+  "um": "UND",
+  "linea": "01 - PELOTAS",
+  "linea_id": "01",
+  "grupo": "01 - NACIONAL",
+  "tipo": "02 - SEMI-DEPORTIVA",
+  "familia": "01 - FUTBOL",
+  "categoria": "VINIBALL",
+  "estado_linea": "",
+  "cantidad_por_caja": 0,
+  "precio_lista": 0.0,
+  "sin_catalogo": false,
+  "almacenes": [...]
+}
+```
+
+**Enriched** (`?enrich=true`): + campos del catalogo maestro
+
+```json
+{
+  "sku": "011019",
+  "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
+  "um": "UND",
+  "linea": "01 - PELOTAS",
+  "linea_id": "01",
+  "categoria": "VINIBALL",
+  "almacenes": [...],
+  "un_bx": 60,
+  "peso_kg": 0.2,
+  "precio": 9.16,
+  "nombre_corto": "Semideportiva Futbol Crackcito Blanco C/Rojo",
+  "ean13": "7754807110198",
+  "ean14": "",
+  "estado_linea": "NACIONAL",
+  "keywords": ["BLANCO", "C/ROJO", "CRACKCITO", ...],
+  "orden": 2,
+  "sin_catalogo": false
+}
+```
 
 ### Tolerancia de entrada
 
 | Input | Resuelve | Ejemplo |
 |-------|----------|---------|
 | Linea `78` | `0178 - ARCHIVO` | padding a 4 digitos + match por prefijo |
-| Linea `80` | `0180 - PUBLICIDAD` | idem |
+| Linea `01` | `0101 - PELOTAS` | idem |
 | Linea `PELOTAS` | `0101 - PELOTAS` | busqueda por texto libre |
 | SKU parcial | match en SKU y descripcion | via `?search=` |
 
@@ -91,11 +140,13 @@ GET /api/v1/stock?categoria=VINIBALL&limit=1
       "sku": "011019",
       "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
       "um": "UND",
-      "linea": "0101 - PELOTAS",
+      "linea": "01 - PELOTAS",
+      "linea_id": "01",
       "grupo": "01 - NACIONAL",
       "tipo": "02 - SEMI-DEPORTIVA",
       "familia": "01 - FUTBOL",
       "categoria": "VINIBALL",
+      "sin_catalogo": false,
       "almacenes": [
         { "almacen": "VES", "tipo": "venta", "disponible": 6672, "stock": 7212, "predespacho": 540 },
         { "almacen": "118", "tipo": "informativo", "disponible": 4, "stock": 4, "predespacho": 0 },
@@ -108,19 +159,26 @@ GET /api/v1/stock?categoria=VINIBALL&limit=1
 
 ## Categorias de negocio
 
-| Categoria | Lineas |
-|-----------|--------|
-| VINIBALL | 0101 (PELOTAS), 01MA (MASCOTAS), 0114 (OTROS), 01AD (ACC. DEPORTIVOS) |
-| VINIFAN | 0102, 0109, 0111, 0172–0179, 01CE, 01CF |
-| INDUSTRIAL | 0120, 0121, 0123 |
-| CIPTECH | 0130, 0131, 0133, 0135 |
-| MATERIALES | 0140, 0150 |
-| INDUMENTARIA | 0152, 0157 |
-| PUBLICIDAD | 0180, 0181 |
-| REPRESENTADAS | 0185 |
-| PRODUCCION | 0170 |
-| DESCARTE Y VARIOS | 0160, 0165, 0198 |
+| Categoria | Lineas (ID normalizado) |
+|-----------|------------------------|
+| VINIBALL | 01 (PELOTAS), MA (MASCOTAS), 14 (OTROS), AD (ACC. DEPORTIVOS) |
+| VINIFAN | 02, 09, 11, 72–79, CE, CF |
+| INDUSTRIAL | 20, 21, 23 |
+| CIPTECH | 30, 31, 33, 35 |
+| MATERIALES | 40, 50 |
+| INDUMENTARIA | 52, 57 |
+| PUBLICIDAD | 80, 81 |
+| REPRESENTADAS | 85 |
+| PRODUCCION | 70 |
+| DESCARTE Y VARIOS | 60, 65, 98 |
 | OTROS | default |
+
+### Linea ID
+
+El campo `linea_id` extrae el identificador corto de la linea:
+- `0101 - PELOTAS` → `linea: "01 - PELOTAS"`, `linea_id: "01"`
+- `01AD - ACCESORIOS DEPORTIVOS` → `linea: "AD - ACCESORIOS DEPORTIVOS"`, `linea_id: "AD"`
+- `0178 - ARCHIVO` → `linea: "78 - ARCHIVO"`, `linea_id: "78"`
 
 ## Estructura del proyecto
 

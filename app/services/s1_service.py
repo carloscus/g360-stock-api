@@ -38,23 +38,33 @@ LIMA_TZ = timezone(timedelta(hours=-5))
 
 def _extraer_linea_id(linea: str) -> Optional[str]:
     """Extract short line ID from linea code.
-    e.g. '0101 - PELOTAS' -> '01', '01AD - ACCESORIOS DEPORTIVOS' -> 'AD'
+    Works with both formats: '0101 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD'
     """
     if not linea:
         return None
+    # Try normalized format first: '01 - PELOTAS' or 'AD - ACCESORIOS'
+    match = re.match(r'^([0-9A-Z]{2,4})\s*-', linea)
+    if match:
+        return match.group(1)
+    # Fallback: original format '0101 - PELOTAS'
     match = re.match(r'^(01[0-9A-Z]+) -', linea)
     if match:
-        return match.group(1)[2:]  # Remove '01' prefix
+        return match.group(1)[2:]
     return None
 
 
 def _normalizar_linea(linea: str) -> str:
-    """Normalize line format: '0101 - PELOTAS' -> '01 - PELOTAS'."""
+    """Normalize line format: '0101 - PELOTAS' -> '01 - PELOTAS', '01AD - ACCESORIOS' -> 'AD - ACCESORIOS'."""
     if not linea:
         return ""
-    match = re.match(r'^(\d{2}[A-Z]{0,2})\s*-\s*(.+)$', linea)
+    match = re.match(r'^01([0-9A-Z]+)\s*-\s*(.+)$', linea)
     if match:
-        return f"{match.group(1)} - {match.group(2).strip()}"
+        suffix = match.group(1)
+        rest = match.group(2).strip()
+        # If suffix starts with digits, keep first 2 chars as ID; else use full suffix
+        if suffix and suffix[0].isdigit():
+            return f"{suffix[:2]} - {rest}"
+        return f"{suffix} - {rest}"
     return linea
 
 

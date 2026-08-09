@@ -163,6 +163,8 @@ class ServicioStock:
                     orden=cat.get("orden", 0),
                     linea_id=linea_id,
                     sin_catalogo=False,
+                    cantidad_por_caja=cat.get("un_bx", 0),
+                    precio_lista=cat.get("precio", 0.0),
                     almacenes=item.almacenes,
                 ))
             else:
@@ -186,6 +188,8 @@ class ServicioStock:
                     orden=0,
                     linea_id=linea_id,
                     sin_catalogo=True,
+                    cantidad_por_caja=0,
+                    precio_lista=0.0,
                     almacenes=item.almacenes,
                 ))
         return enriched

@@ -58,14 +58,17 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
 
 
 def _normalizar_linea(linea: str) -> str:
-    """Normalize line format: '0101 - PELOTAS' -> '01 - PELOTAS', '01AD - ACCESORIOS' -> 'AD - ACCESORIOS'."""
+    """Normalize line format for display.
+    Preserves full code for numeric codes (0101->0101), strips 01 prefix for alpha codes (01AD->AD).
+    """
     if not linea:
         return ""
     match = re.match(r'^01([0-9A-Z]+)\s*-\s*(.+)$', linea)
     if match:
         suffix = match.group(1)
         rest = match.group(2).strip()
-        # If suffix starts with digits, keep first 2 chars as ID; else use full suffix
+        # If suffix starts with digit, keep 2-char version (0101->01, 0114->14)
+        # If suffix starts with letter, strip 01 (01AD->AD, 01MA->MA)
         if suffix and suffix[0].isdigit():
             return f"{suffix[:2]} - {rest}"
         return f"{suffix} - {rest}"

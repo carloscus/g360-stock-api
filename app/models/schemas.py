@@ -36,6 +36,7 @@ class ItemStockEnriched(ItemStock):
     estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO, TRADICIONAL)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
+    linea_id: Optional[str] = Field(None, description="Short line identifier extracted from linea code (e.g. '01' from '0101 - PELOTAS', 'AD' from '01AD - ACCESORIOS DEPORTIVOS')")
 
 
 class MetadataStock(BaseModel):

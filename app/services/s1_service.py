@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import tempfile
 import threading
@@ -33,6 +34,18 @@ from app.services.catalog_service import catalog_service
 
 
 LIMA_TZ = timezone(timedelta(hours=-5))
+
+
+def _extraer_linea_id(linea: str) -> Optional[str]:
+    """Extract short line ID from linea code.
+    e.g. '0101 - PELOTAS' -> '01', '01AD - ACCESORIOS DEPORTIVOS' -> 'AD'
+    """
+    if not linea:
+        return None
+    match = re.match(r'^(01[0-9A-Z]+) -', linea)
+    if match:
+        return match.group(1)[2:]  # Remove '01' prefix
+    return None
 
 
 def _tipo_almacen(codigo: str) -> str:
@@ -103,6 +116,7 @@ class ServicioStock:
         enriched = []
         for item in items:
             cat = catalog_service.buscar(item.sku)
+            linea_id = _extraer_linea_id(item.linea)
             if cat:
                 enriched.append(ItemStockEnriched(
                     sku=item.sku,
@@ -122,6 +136,7 @@ class ServicioStock:
                     estado_linea=cat.get("estado_linea", ""),
                     keywords=cat.get("keywords", []),
                     orden=cat.get("orden", 0),
+                    linea_id=linea_id,
                     almacenes=item.almacenes,
                 ))
             else:
@@ -142,6 +157,8 @@ class ServicioStock:
                     ean14="",
                     estado_linea="",
                     keywords=[],
+                    orden=0,
+                    linea_id=linea_id,
                     almacenes=item.almacenes,
                 ))
         return enriched

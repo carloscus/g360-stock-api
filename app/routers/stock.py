@@ -12,10 +12,11 @@ router = APIRouter(tags=["stock"])
 
 @router.get(
     "/api/v1/stock",
+    response_model=StockEnrichedResponse,
     summary="Listar stock de todos los productos",
     description="Obtiene el stock consolidado desde la fuente S1 (appweb.cipsa.com.pe). "
                 "Acepta filtros opcionales, paginacion y categorizacion. "
-                "Usar ?enrich=true para incluir datos del catalogo (un_bx, peso, precio, ean).",
+                "Siempre devuelve datos enriquecidos con catalogo maestro (orden, un_bx, precio, ean, etc.).",
 )
 def listar_stock(
     almacen: Optional[str] = Query(None, description="Filtrar por codigo de almacen (ej: VES, 40, 118)"),
@@ -26,20 +27,19 @@ def listar_stock(
     fuente: str = Query("general", description="Fuente de datos: general, sucursales, todas"),
     limit: Optional[int] = Query(None, description="Maximo de items (paginacion). Ej: 100", ge=1, le=5000),
     offset: int = Query(0, description="Items a saltar (paginacion). Ej: 100", ge=0),
-    enrich: bool = Query(False, description="Incluir datos del catalogo (un_bx, peso, precio, ean13, ean14)"),
 ):
     return servicio_stock.obtener_stock(
         almacen=almacen, busqueda=search, linea=linea, um=um,
-        categoria=categoria, fuente=fuente, limit=limit, offset=offset, enrich=enrich,
+        categoria=categoria, fuente=fuente, limit=limit, offset=offset, enrich=True,
     )
 
 
 @router.get(
     "/api/v1/stock/{sku}",
-    response_model=ItemStock | ItemStockEnriched,
+    response_model=ItemStockEnriched,
     summary="Obtener detalle de un SKU",
     description="Busca un producto por su codigo SKU y devuelve su detalle "
-    "con desglose por almacen. Usar ?enrich=true para incluir datos del catalogo.",
+    "con desglose por almacen y datos enriquecidos del catalogo maestro.",
 )
 def obtener_sku(
     sku: str,
@@ -47,15 +47,8 @@ def obtener_sku(
         "general",
         description="Fuente de datos: general, sucursales, todas",
     ),
-    enrich: bool = Query(
-        False,
-        description="Enriquecer con datos del catalogo",
-    ),
-) -> ItemStock | ItemStockEnriched:
-    if enrich:
-        item = servicio_stock.obtener_sku_enriched(sku.strip().upper(), fuente=fuente)
-    else:
-        item = servicio_stock.obtener_sku(sku.strip().upper(), fuente=fuente)
+) -> ItemStockEnriched:
+    item = servicio_stock.obtener_sku_enriched(sku.strip().upper(), fuente=fuente)
     if not item:
         raise HTTPException(
             status_code=404,

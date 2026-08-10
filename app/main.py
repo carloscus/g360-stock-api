@@ -31,7 +31,8 @@ class CompressionMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         
         # Skip compression for small responses
-        if response.headers.get("content-length") and int(response.headers["content-length"]) < 500:
+        content_length = response.headers.get("content-length")
+        if content_length and int(content_length) < 500:
             return response
         
         # Skip if already compressed
@@ -40,18 +41,21 @@ class CompressionMiddleware(BaseHTTPMiddleware):
         
         accept_encoding = request.headers.get("accept-encoding", "")
         
+        # Read body
+        body = b"".join([chunk async for chunk in response.body_iterator])
+        
         # Try brotli first (better compression)
         if "br" in accept_encoding:
             try:
                 import brotli
-                body = b"".join([chunk async for chunk in response.body_iterator])
                 compressed = brotli.compress(body)
                 return Response(
                     content=compressed,
                     status_code=response.status_code,
                     headers={
-                        **response.headers,
+                        **dict(response.headers),
                         "content-encoding": "br",
+                        "content-length": str(len(compressed)),
                         "vary": "accept-encoding",
                     },
                 )
@@ -61,21 +65,27 @@ class CompressionMiddleware(BaseHTTPMiddleware):
         # Fall back to gzip
         if "gzip" in accept_encoding:
             try:
-                body = b"".join([chunk async for chunk in response.body_iterator])
+                import gzip
                 compressed = gzip.compress(body)
                 return Response(
                     content=compressed,
                     status_code=response.status_code,
                     headers={
-                        **response.headers,
+                        **dict(response.headers),
                         "content-encoding": "gzip",
+                        "content-length": str(len(compressed)),
                         "vary": "accept-encoding",
                     },
                 )
             except Exception:
                 pass
         
-        return response
+        # Return uncompressed
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            headers=dict(response.headers),
+        )
 
 
 @asynccontextmanager

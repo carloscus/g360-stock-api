@@ -154,60 +154,38 @@ Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
 
 ## Lineas de producto
 
-| Linea | ID | Categoria | SKUs |
-|-------|----|-----------|------|
-| PELOTAS | 01 | VINIBALL | 298 |
-| ARCHIVO | 78 | VINIFAN | 318 |
-| ACCESORIOS | 79 | VINIFAN | 96 |
-| PUBLICIDAD | 80 | PUBLICIDAD | 112 |
-| REPRESENTADAS | 85 | REPRESENTADAS | 195 |
-| ESCRITURA | 76 | VINIFAN | 160 |
-| PINTURA | 77 | VINIFAN | 103 |
-| PRODUCTOS INDUSTRIALES | 20 | INDUSTRIAL | 181 |
-| REPRESENTACIONES INDUSTRIALES | 21 | INDUSTRIAL | 201 |
-| INDUMENTARIA Y EPP | 57 | INDUMENTARIA | 162 |
-| METALICA | 11 | VINIFAN | 36 |
-| PEGAMENTOS | 72 | VINIFAN | 22 |
-| SENSORIALES | 09 | VINIFAN | 4 |
-| DIBUJO | 75 | VINIFAN | 20 |
-| FORROS | 02 | VINIFAN | 28 |
-| DIDACTICOS | 73 | VINIFAN | 31 |
-| MASCOTAS | MA | VINIBALL | 10 |
-| KITS | 81 | PUBLICIDAD | 7 |
-| VARIOS | 99 | DESCARTE Y VARIOS | 50 |
-| OTROS | 14 | OTROS | 15 |
-| SEGURIDAD Y SEÑALIZACION VIAL | 23 | INDUSTRIAL | 37 |
-| CIPTECH ETIQUETAS | 30 | CIPTECH | 12 |
-| CIPTECH CINTAS | 31 | CIPTECH | 5 |
-| CIPTECH CIL | 33 | CIPTECH | 1 |
-| CIPTECH SUPPLY CHAIN | 35 | CIPTECH | 2 |
-| MATERIA PRIMA | 40 | MATERIALES | 20 |
-| MATERIALES AUXILIARES | 50 | MATERIALES | 40 |
-| INSUMOS LIMPIEZA Y SEGURIDAD | 52 | INDUMENTARIA | 1 |
-| SCRAP | 60 | DESCARTE Y VARIOS | 1 |
-| MERCADERIAS VARIAS | 65 | DESCARTE Y VARIOS | 37 |
-| PRODUCTOS EN PROCESO | 70 | PRODUCCION | 9 |
-| ACCESORIOS DEPORTIVOS | AD | VINIBALL | 1 |
-| MANUALIDADES | CE | VINIFAN | 8 |
-| SET | CF | VINIFAN | 2 |
+**34 lineas** distribuidas en 10 categorias de negocio. Top lineas por volumen:
+
+| Linea | SKUs | Categoria |
+|-------|------|-----------|
+| ARCHIVO | 318 | VINIFAN |
+| PELOTAS | 298 | VINIBALL |
+| REPRESENTACIONES INDUSTRIALES | 201 | INDUSTRIAL |
+| REPRESENTADAS | 195 | REPRESENTADAS |
+| PRODUCTOS INDUSTRIALES | 181 | INDUSTRIAL |
+| INDUMENTARIA Y EPP | 162 | INDUMENTARIA |
+| ESCRITURA | 160 | VINIFAN |
+| PUBLICIDAD | 112 | PUBLICIDAD |
+| ACCESORIOS | 96 | VINIFAN |
+| PINTURA | 103 | VINIFAN |
 
 Total: **2,184 SKUs** en fuente general, **798 SKUs** en sucursales, **2,982 SKUs** combinados.
 
 ## Categorias de negocio
 
-| Categoria | Lineas (ID) |
-|-----------|-------------|
-| VINIBALL | 01, MA, 14, AD |
-| VINIFAN | 02, 09, 11, 72–79, CE, CF |
-| INDUSTRIAL | 20, 21, 23 |
-| CIPTECH | 30, 31, 33, 35 |
-| MATERIALES | 40, 50 |
-| INDUMENTARIA | 52, 57 |
-| PUBLICIDAD | 80, 81 |
-| REPRESENTADAS | 85 |
-| PRODUCCION | 70 |
-| DESCARTE Y VARIOS | 60, 65, 98 |
-| OTROS | default |
+| Categoria | Lineas principales | SKUs |
+|-----------|-------------------|------|
+| VINIFAN | 02, 09, 11, 72-79, CE, CF | ~1,000 |
+| VINIBALL | 01, MA, 14, AD | ~350 |
+| INDUSTRIAL | 20, 21, 23 | ~420 |
+| REPRESENTADAS | 85 | 195 |
+| INDUMENTARIA | 52, 57 | 163 |
+| PUBLICIDAD | 80, 81 | 119 |
+| MATERIALES | 40, 50 | 60 |
+| CIPTECH | 30, 31, 33, 35 | 20 |
+| DESCARTE Y VARIOS | 60, 65, 98 | 47 |
+| PRODUCCION | 70 | 9 |
+| OTROS | - | 15 |
 
 ## Estructura del proyecto
 

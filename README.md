@@ -5,56 +5,304 @@
   <img alt="g360-stock-api" height="64" src="logotypes/logo-g360-dark.svg">
 </picture>
 
-> Proyecto g360-stock-api
+> API REST para el reporte de stock **S1** desde **appweb.cipsa.com.pe**. Descarga los archivos XLS del ERP (general + sucursales), los parsea y los sirve como JSON estructurado por SKU y almacen, enriquecido con datos del catalogo maestro.
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com)
+[![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 
 ## ¿Cómo está organizado el proyecto?
 
-```mermaid
-flowchart TD
-    App["Aplicacion"]
-    Config["Configuracion"]
-    Assets["Assets"]
-    App --> Config
-    App --> Assets
+```
+appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache.json
+                    ──XLS──▶                  ──▶ data/stock_cache_sucursales.json
+                     (general)                 (sucursales)
+                                   │
+                      g360-master-data ──JSON──▶ data/catalog_cache.json
+                                   │
+                              JSON responses
+                           (GET /api/v1/stock*)
 ```
 
-## Quick Start
+- **Sin base de datos.** Cache en disco con backup rotativo (`.bak`) y TTL configurable.
+- **Dos fuentes de stock.** General (VES, 40, 118...) y Sucursales (S1, S2, S3...).
+- **Catalogo maestro.** Cargado desde `g360-master-data` (JSON) para enriquecimiento. Auto-descarga desde GitHub en Render free.
+- **Horario laboral L–S 7:00–22:59.** Fuera de ese rango y domingos no se descarga, se sirve cache vencido.
+- **Stale cache.** Si appweb falla, se sirve cache vencido sin reintentar hasta el proximo TTL.
+- **Retry.** Reintenta 1 vez ante timeout de red.
+- **Thread-safe.** Lock de descarga para evitar duplicados en concurrencia.
+
+## Endpoints
+
+| Metodo | Ruta | Descripcion |
+|--------|------|-------------|
+| `GET` | `/api/v1/health` | Estado del servicio y cache |
+| `GET` | `/api/v1/stock` | Listar stock completo con filtros (siempre enriquecido) |
+| `GET` | `/api/v1/stock/{sku}` | Detalle de un SKU con desglose por almacen |
+| `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles (filtro por tipo) |
+| `GET` | `/api/v1/lineas` | Lista de lineas de producto |
+| `GET` | `/api/v1/categorias` | Lista de categorias de negocio con sus lineas |
+| `GET` | `/api/v1/resumen` | Resumen y KPIs del stock |
+| `POST` | `/api/v1/upload/stock` | Subir archivo XLS manualmente |
+| `POST` | `/api/v1/upload/catalog` | Subir catalogo maestro JSON |
+| `GET` | `/api/v1/catalog/health` | Estado del catalogo cargado |
+
+### Parametros de GET /api/v1/stock
+
+| Parametro | Tipo | Ejemplo | Descripcion |
+|-----------|------|---------|-------------|
+| `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen |
+| `search` | string | `CRACKCITO` | Buscar por SKU o descripcion |
+| `linea` | string | `01`, `PELOTAS`, `78`, `AD` | Filtrar por linea (tolerante) |
+| `grupo` | string | `NACIONAL`, `FOLDER` | Filtrar por grupo de producto |
+| `categoria` | string | `VINIBALL`, `VINIFAN` | Filtrar por categoria de negocio |
+| `tipo` | string | `venta`, `mktd` | Filtrar por tipo de almacen |
+| `um` | string | `UND`, `KGR`, `BST` | Filtrar por unidad de medida |
+| `fuente` | string | `general`, `sucursales`, `todas` | Fuente de datos (default: `general`) |
+| `limit` | int | `100` | Maximo de items a retornar (max 5000) |
+| `offset` | int | `100` | Paginacion |
+
+### Parametros de GET /api/v1/almacenes
+
+| Parametro | Tipo | Ejemplo | Descripcion |
+|-----------|------|---------|-------------|
+| `tipo` | string | `venta`, `mktd`, `todas` | Filtrar por tipo de almacen |
+
+### Formato de respuesta
+
+**GET /api/v1/stock/011019:**
+
+```json
+{
+  "sku": "011019",
+  "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
+  "um": "UND",
+  "linea": "01 - PELOTAS",
+  "linea_id": "01",
+  "grupo": "01 - NACIONAL",
+  "tipo": "02 - SEMI-DEPORTIVA",
+  "familia": "01 - FUTBOL",
+  "categoria": "VINIBALL",
+  "almacenes": [
+    { "almacen": "VES", "tipo": "venta",  "stock": 6552, "predespacho": 1320, "disponible": 5232 },
+    { "almacen": "118", "tipo": "mktd",   "stock": 4,     "predespacho": 0,    "disponible": 4 },
+    { "almacen": "40",  "tipo": "venta",  "stock": 36,    "predespacho": 0,    "disponible": 36 }
+  ],
+  "estado_linea": "NACIONAL",
+  "un_bx": 60,
+  "peso_kg": 0.2,
+  "precio": 9.16,
+  "nombre_corto": "Semideportiva Futbol Crackcito Blanco C/Rojo",
+  "ean13": "7754807110198",
+  "ean14": "",
+  "keywords": ["BLANCO", "C/ROJO", "CRACKCITO", "FUTBOL", "PELOTAS", "SEMIDEPORTIVA", "VINIBALL"],
+  "orden": 2,
+  "sin_catalogo": false
+}
+```
+
+### Tolerancia de entrada
+
+| Input | Resuelve | Ejemplo |
+|-------|----------|---------|
+| Linea `78` | `78 - ARCHIVO` | match por ID normalizado |
+| Linea `01` | `01 - PELOTAS` | idem |
+| Linea `AD` | `AD - ACCESORIOS DEPORTIVOS` | idem |
+| Linea `PELOTAS` | `01 - PELOTAS` | busqueda por texto libre |
+| SKU parcial | match en SKU y descripcion | via `?search=` |
+
+## Tipos de almacen
+
+| Tipo | Almacenes |
+|------|-----------|
+| `venta` | VES, 40, 92, 106, 121, 122, 129 |
+| `mktd` | 118, S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 |
+
+El tipo se refleja en cada item del array `almacenes[].tipo`. El endpoint `/almacenes` permite filtrar por tipo con `?tipo=venta` o `?tipo=mktd`.
+
+## Fuentes de datos
+
+| Fuente | URL appweb | Almacenes | Cache |
+|--------|-----------|-----------|-------|
+| `general` | `parametroX2=""` | VES, 40, 92, 106, 121, 122, 129, 118 | `data/stock_cache.json` |
+| `sucursales` | `parametroX2="1"` | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 | `data/stock_cache_sucursales.json` |
+| `todas` | ambas | ambos | ambas |
+
+## Catalogo maestro
+
+El catalogo se carga desde `g360-master-data` (JSON generado externamente):
+- **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
+- **Auto-carga** — al iniciar, si no hay catalogo en disco, se descarga desde GitHub raw
+- **TTL** — 6 horas (21600s)
+- **Campos usados**: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
+
+## Cache
+
+Archivos de cache en `data/`:
+- `stock_cache.json` — fuente general
+- `stock_cache_sucursales.json` — fuente sucursales
+- `catalog_cache.json` — catalogo maestro
+
+Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
+
+### Reglas de refresco
+
+1. **Sin cache** → descarga forzada (sin importar dia/hora)
+2. **Cache vigente** → sirve del cache
+3. **Cache vencido + horario valido** (L–S 7:00–22:59) → descarga fresh
+4. **Cache vencido + horario invalido** → sirve cache vencido
+5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min
+
+## Lineas de producto
+
+| Linea | ID | Categoria | SKUs |
+|-------|----|-----------|------|
+| PELOTAS | 01 | VINIBALL | 298 |
+| ARCHIVO | 78 | VINIFAN | 318 |
+| ACCESORIOS | 79 | VINIFAN | 96 |
+| PUBLICIDAD | 80 | PUBLICIDAD | 112 |
+| REPRESENTADAS | 85 | REPRESENTADAS | 195 |
+| ESCRITURA | 76 | VINIFAN | 160 |
+| PINTURA | 77 | VINIFAN | 103 |
+| PRODUCTOS INDUSTRIALES | 20 | INDUSTRIAL | 181 |
+| REPRESENTACIONES INDUSTRIALES | 21 | INDUSTRIAL | 201 |
+| INDUMENTARIA Y EPP | 57 | INDUMENTARIA | 162 |
+| METALICA | 11 | VINIFAN | 36 |
+| PEGAMENTOS | 72 | VINIFAN | 22 |
+| SENSORIALES | 09 | VINIFAN | 4 |
+| DIBUJO | 75 | VINIFAN | 20 |
+| FORROS | 02 | VINIFAN | 28 |
+| DIDACTICOS | 73 | VINIFAN | 31 |
+| MASCOTAS | MA | VINIBALL | 10 |
+| KITS | 81 | PUBLICIDAD | 7 |
+| VARIOS | 99 | DESCARTE Y VARIOS | 50 |
+| OTROS | 14 | OTROS | 15 |
+| SEGURIDAD Y SEÑALIZACION VIAL | 23 | INDUSTRIAL | 37 |
+| CIPTECH ETIQUETAS | 30 | CIPTECH | 12 |
+| CIPTECH CINTAS | 31 | CIPTECH | 5 |
+| CIPTECH CIL | 33 | CIPTECH | 1 |
+| CIPTECH SUPPLY CHAIN | 35 | CIPTECH | 2 |
+| MATERIA PRIMA | 40 | MATERIALES | 20 |
+| MATERIALES AUXILIARES | 50 | MATERIALES | 40 |
+| INSUMOS LIMPIEZA Y SEGURIDAD | 52 | INDUMENTARIA | 1 |
+| SCRAP | 60 | DESCARTE Y VARIOS | 1 |
+| MERCADERIAS VARIAS | 65 | DESCARTE Y VARIOS | 37 |
+| PRODUCTOS EN PROCESO | 70 | PRODUCCION | 9 |
+| ACCESORIOS DEPORTIVOS | AD | VINIBALL | 1 |
+| MANUALIDADES | CE | VINIFAN | 8 |
+| SET | CF | VINIFAN | 2 |
+
+Total: **2,184 SKUs** en fuente general, **798 SKUs** en sucursales, **2,982 SKUs** combinados.
+
+## Categorias de negocio
+
+| Categoria | Lineas (ID) |
+|-----------|-------------|
+| VINIBALL | 01, MA, 14, AD |
+| VINIFAN | 02, 09, 11, 72–79, CE, CF |
+| INDUSTRIAL | 20, 21, 23 |
+| CIPTECH | 30, 31, 33, 35 |
+| MATERIALES | 40, 50 |
+| INDUMENTARIA | 52, 57 |
+| PUBLICIDAD | 80, 81 |
+| REPRESENTADAS | 85 |
+| PRODUCCION | 70 |
+| DESCARTE Y VARIOS | 60, 65, 98 |
+| OTROS | default |
+
+## Estructura del proyecto
+
+```
+g360-stock-api/
+├── app/
+│   ├── core/
+│   │   ├── constants.py      # Columnas XLS, categorias, lineas, almacenes, prefijos
+│   │   ├── parsers.py         # Parser XLS con headers de categoria (LINEA/GRUPO/TIPO/FAMILIA)
+│   │   └── xls_fallback.py    # Lector XLS multiformato (openpyxl, xlrd, csv, html, xml)
+│   ├── models/
+│   │   └── schemas.py         # Pydantic models (ItemStockEnriched, StockEnrichedResponse, etc.)
+│   ├── routers/
+│   │   ├── health.py          # GET /api/v1/health
+│   │   ├── stock.py           # GET /api/v1/stock, /{sku}, /lineas, /almacenes, /categorias
+│   │   ├── upload.py          # POST /api/v1/upload (XLS manual)
+│   │   ├── resumen.py         # GET /api/v1/resumen
+│   │   └── catalog.py         # POST /api/v1/catalog/upload, GET /api/v1/catalog/health
+│   ├── services/
+│   │   ├── s1_service.py      # Logica: descarga, parseo, cache dual, enriquecimiento, filtros
+│   │   └── catalog_service.py # Gestion del catalogo maestro en memoria con TTL
+│   ├── config.py              # Settings via pydantic-settings
+│   └── main.py                # FastAPI app con CORS, auth y routers
+├── tests/
+│   ├── samples/               # REPT_STOCK_SAMPLE.xls (reemplazado por reporte completo)
+│   ├── test_api.py            # Tests de integracion
+│   ├── test_catalog.py        # Tests de catalogo (upload, health, enrich)
+│   └── test_parsers.py        # Tests de parser
+├── data/                      # Cache JSON + .bak (gitignored)
+├── stock_cipsa.yaml           # Blueprint Render
+├── requirements.txt
+├── .env.example
+└── .gitignore
+```
+
+## Configuracion
+
+Variables de entorno (prefix `S1_`):
+
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `S1_API_KEY` | `""` | API Key para proteger endpoints. Vacío = sin auth |
+| `S1_SOURCE1_URL` | URL appweb | Fuente general (parametroX2="") |
+| `S1_SOURCE2_URL` | URL appweb | Fuente sucursales (parametroX2="1") |
+| `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache de stock (15 min) |
+| `S1_CACHE_RUTA` | `data/stock_cache.json` | Cache de fuente general |
+| `S1_CACHE_RUTA2` | `data/stock_cache_sucursales.json` | Cache de fuente sucursales |
+| `S1_CATALOGO_RUTA` | `data/catalog_cache.json` | Cache del catalogo maestro |
+| `S1_CATALOGO_TTL_SEGUNDOS` | `21600` | TTL del catalogo (6 horas) |
+| `S1_CATALOGO_RAW_URL` | URL GitHub | Fuente remota del catalogo para auto-carga |
+| `S1_PUERTO` | `8000` | Puerto del servidor |
+
+### Autenticacion (opcional)
+
+Si se configura `S1_API_KEY`, todos los endpoints requieren el header:
+
+```
+X-API-Key: tu-clave-secreta
+```
+
+Sin el header o con clave incorrecta → `403 Forbidden`. Si `S1_API_KEY` esta vacio (default), la API es abierta.
+
+## Desarrollo
 
 ```bash
-# 1. Entrar al proyecto
-cd g360-stock-api
-
-# 2. Ver estructura
-g360 present
-
-# 3. Auditar compliance
-g360 audit
-
-# 4. Traer assets de marca
-g360 bring brand
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-## Identidad de Marca
+Documentacion interactiva en `http://localhost:8000/docs`.
 
-| Elemento | Valor |
-|---|---|
-| Marca | G360 |
-| Color primario | #00d084 |
-| Signature mode | powered |
-| Signature text | "powered by G360" |
-| Logo | logotypes/logo-g360-dark.svg |
+## Tests
 
-## Footer
-
-```html
-<g360-signature mode="powered"></g360-signature>
+```bash
+pytest tests/ -v
 ```
 
----
+Tests que cubren:
+- Parseo de XLS (formato con headers de categoria en columnas separadas)
+- Filtros por almacen, busqueda, linea, grupo, categoria, tipo, UM
+- Calculo de disponible (stock - predespacho, nunca negativo)
+- Enriquecimiento con catalogo maestro (linea_id, ean, precio, keywords, etc.)
+- Cache, backup .bak, upload de XLS y catalogo
+- Health, almacenes (con filtro por tipo), lineas, categorias
+- 404, subida sin archivo, catalog health
 
-**Marca**: G360 · **Isotipo**: 3 puntos + chevron `>`
-**Signature**: powered by G360 · **Powered by**: [g360-signature](https://github.com/carloscus/g360-signature)
+## Deploy en Render
 
-*Generado por `g360 docs` · Fuente: `brand.json` + `skill.json` + `g360-manifest.json`*
+El repositorio incluye `stock_cipsa.yaml` (Blueprints). Pasos:
+
+1. Crear repositorio en GitHub y subir el proyecto
+2. Render Dashboard → New → Blueprint → seleccionar repositorio
+3. Render detecta `stock_cipsa.yaml` y configura automaticamente
+4. Opcional: ajustar variables de entorno en Render Dashboard
+
+## Licencia
+
+Proyecto interno del ecosistema **G360 - CIPSA**.

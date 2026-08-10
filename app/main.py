@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import gzip
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.security import APIKeyHeader
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from app.config import settings
 from app.routers import catalog, health, resumen, stock, upload
@@ -18,6 +22,60 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 def verificar_api_key(api_key: str = Depends(api_key_header)) -> None:
     if settings.api_key and api_key != settings.api_key:
         raise HTTPException(status_code=403, detail="API Key invalida")
+
+
+class CompressionMiddleware(BaseHTTPMiddleware):
+    """Compress responses with gzip or brotli based on Accept-Encoding header."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Skip compression for small responses
+        if response.headers.get("content-length") and int(response.headers["content-length"]) < 500:
+            return response
+        
+        # Skip if already compressed
+        if "content-encoding" in response.headers:
+            return response
+        
+        accept_encoding = request.headers.get("accept-encoding", "")
+        
+        # Try brotli first (better compression)
+        if "br" in accept_encoding:
+            try:
+                import brotli
+                body = b"".join([chunk async for chunk in response.body_iterator])
+                compressed = brotli.compress(body)
+                return Response(
+                    content=compressed,
+                    status_code=response.status_code,
+                    headers={
+                        **response.headers,
+                        "content-encoding": "br",
+                        "vary": "accept-encoding",
+                    },
+                )
+            except Exception:
+                pass
+        
+        # Fall back to gzip
+        if "gzip" in accept_encoding:
+            try:
+                body = b"".join([chunk async for chunk in response.body_iterator])
+                compressed = gzip.compress(body)
+                return Response(
+                    content=compressed,
+                    status_code=response.status_code,
+                    headers={
+                        **response.headers,
+                        "content-encoding": "gzip",
+                        "vary": "accept-encoding",
+                    },
+                )
+            except Exception:
+                pass
+        
+        return response
 
 
 @asynccontextmanager
@@ -63,6 +121,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(CompressionMiddleware)
 
 app.include_router(health.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(stock.router, dependencies=[Depends(verificar_api_key)])

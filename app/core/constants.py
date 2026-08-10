@@ -7,6 +7,11 @@ COLUMNA_UM: int = 12
 COLUMNA_STOCK: int = 13
 COLUMNA_PREDESPACHO: int = 16
 
+# Columnas donde aparecen los headers de categoria (LINEA, GRUPO, TIPO, FAMILIA)
+# Reporte resumido: cols 3, 6, 8, 11
+# Reporte completo (appweb): col 1
+COLUMNA_CATEGORIA: int = 1
+
 FILAS_METADATA: int = 10
 
 PREFIJOS_CATEGORIA: tuple[str, ...] = ("LINEA:", "GRUPO:", "TIPO:", "FAMILIA:")
@@ -26,9 +31,9 @@ ENCABEZADOS_HTTP: dict[str, str] = {
 
 ALMACEN_PRINCIPAL: str = "VES"
 
-ALMACENES_VENTA: set[str] = {"VES", "40", "121", "122", "129", "92", "106"}
-ALMACENES_INFORMATIVO: set[str] = {"118"}
-# Los almacenes S* (sucursales) se detectan por prefijo "S" y son informativos
+ALMACENES_MKTD: set[str] = {"118"}
+# S* (sucursales) se detectan por prefijo "S" y son mktd
+# Todo lo demas es venta
 
 # ── Categorias de negocio ─────────────────────────────────────────────
 # Lineas explicitas asignadas a cada categoria.

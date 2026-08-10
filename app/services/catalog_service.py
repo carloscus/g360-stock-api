@@ -45,6 +45,8 @@ class CatalogService:
                 self._catalog = catalog
                 if fecha_str:
                     self._fecha_carga = datetime.fromisoformat(fecha_str)
+                    if self._fecha_carga.tzinfo is None:
+                        self._fecha_carga = self._fecha_carga.replace(tzinfo=timezone.utc)
                 else:
                     self._fecha_carga = datetime.now(timezone.utc)
 

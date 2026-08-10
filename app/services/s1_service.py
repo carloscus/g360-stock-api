@@ -15,8 +15,7 @@ from app.config import settings
 from app.core.constants import (
     ENCABEZADOS_HTTP,
     ALMACEN_PRINCIPAL,
-    ALMACENES_VENTA,
-    ALMACENES_INFORMATIVO,
+    ALMACENES_MKTD,
     asignar_categoria,
 )
 from app.core.parsers import parsear_stock_desde_xls
@@ -25,7 +24,6 @@ from app.models.schemas import (
     ItemStock,
     ItemStockEnriched,
     MetadataStock,
-    StockResponse,
     StockEnrichedResponse,
     ResumenStock,
     HealthResponse,
@@ -38,51 +36,75 @@ LIMA_TZ = timezone(timedelta(hours=-5))
 
 def _extraer_linea_id(linea: str) -> Optional[str]:
     """Extract short line ID from linea code.
-    Works with both formats: '01 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD'
-    Also handles original: '0101 - PELOTAS' -> '01'
+    Works with: '0101' -> '01', '0101 - PELOTAS' -> '01',
+    '01 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD', '78' -> '78', 'MA' -> 'MA'
     """
     if not linea:
         return None
-    # Try normalized format first: '01 - PELOTAS' or 'AD - ACCESORIOS'
-    match = re.match(r'^([0-9A-Z]{2,4})\s*-', linea)
+    # Plain 2-char code: '01', '78', 'MA', 'AD'
+    match = re.match(r'^([0-9A-Z]{2})$', linea)
     if match:
         return match.group(1)
-    # Fallback: original format '0101 - PELOTAS'
+    # 4-digit plain code: '0101' -> '01'
+    match = re.match(r'^01([0-9]{2})$', linea)
+    if match:
+        return match.group(1)
+    # 4-char alphanum plain code: '01AD' -> 'AD'
+    match = re.match(r'^01([0-9A-Z]+)$', linea)
+    if match:
+        suffix = match.group(1)
+        if suffix and suffix[0].isdigit():
+            return suffix[:2]
+        return suffix
+    # With name separator: '01 - PELOTAS', 'AD - ACCESORIOS', '0101 - PELOTAS'
     match = re.match(r'^01([0-9A-Z]+)\s*-', linea)
     if match:
         suffix = match.group(1)
         if suffix and suffix[0].isdigit():
             return suffix[:2]
         return suffix
+    match = re.match(r'^([0-9A-Z]{2,4})\s*-', linea)
+    if match:
+        return match.group(1)
     return None
 
 
 def _normalizar_linea(linea: str) -> str:
     """Normalize line format for display.
-    Preserves full code for numeric codes (0101->0101), strips 01 prefix for alpha codes (01AD->AD).
+    Handles: '0101' -> '01', '0101 - PELOTAS' -> '01 - PELOTAS',
+    '01AD - ACCESORIOS' -> 'AD - ACCESORIOS', '01 - PELOTAS' -> '01 - PELOTAS'
     """
     if not linea:
         return ""
+    # Plain 4-digit code with no separator: '0101' -> '01'
+    match = re.match(r'^01([0-9]{2})$', linea)
+    if match:
+        return match.group(1)
+    # Plain 4-char alphanum code: '01AD' -> 'AD'
+    match = re.match(r'^01([0-9A-Z]+)$', linea)
+    if match:
+        suffix = match.group(1)
+        if suffix and suffix[0].isdigit():
+            return suffix[:2]
+        return suffix
+    # Full code with name: '0101 - PELOTAS' or '01AD - ACCESORIOS'
     match = re.match(r'^01([0-9A-Z]+)\s*-\s*(.+)$', linea)
     if match:
         suffix = match.group(1)
         rest = match.group(2).strip()
-        # If suffix starts with digit, keep 2-char version (0101->01, 0114->14)
-        # If suffix starts with letter, strip 01 (01AD->AD, 01MA->MA)
         if suffix and suffix[0].isdigit():
             return f"{suffix[:2]} - {rest}"
         return f"{suffix} - {rest}"
+    # Already normalized: '01 - PELOTAS' or 'AD - ACCESORIOS'
+    if re.match(r'^[0-9A-Z]{2,4}\s*-', linea):
+        return linea
     return linea
 
 
 def _tipo_almacen(codigo: str) -> str:
-    if codigo in ALMACENES_VENTA:
-        return "venta"
-    if codigo in ALMACENES_INFORMATIVO:
-        return "informativo"
-    if codigo.upper().startswith("S"):
-        return "sucursal"
-    return "informativo"
+    if codigo in ALMACENES_MKTD or codigo.upper().startswith("S"):
+        return "mktd"
+    return "venta"
 
 
 class ServicioStock:
@@ -107,27 +129,18 @@ class ServicioStock:
         almacen: Optional[str] = None,
         busqueda: Optional[str] = None,
         linea: Optional[str] = None,
+        grupo: Optional[str] = None,
         um: Optional[str] = None,
         categoria: Optional[str] = None,
+        tipo: Optional[str] = None,
         fuente: str = "general",
         limit: Optional[int] = None,
         offset: int = 0,
-        enrich: bool = False,
-    ) -> StockResponse | StockEnrichedResponse:
+    ) -> StockEnrichedResponse:
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_items_segun_fuente(fuente)
-        if enrich and catalog_service.cargado:
-            items_enriched = self._enriquecer_items(items)
-            return self._construir_respuesta(items_enriched, fuente, almacen, busqueda, linea, um, categoria, limit, offset, enrich=True)
-        return self._construir_respuesta(items, fuente, almacen, busqueda, linea, um, categoria, limit, offset, enrich=False)
-
-    def obtener_sku(self, sku: str, fuente: str = "general") -> Optional[ItemStock]:
-        self._refrescar_si_es_necesario(fuente)
-        items = self._obtener_items_segun_fuente(fuente)
-        for item in items:
-            if item.sku == sku:
-                return item
-        return None
+        items_enriched = self._enriquecer_items(items)
+        return self._construir_respuesta(items_enriched, fuente, almacen, busqueda, linea, grupo, um, categoria, limit, offset, tipo=tipo)
 
     def obtener_sku_enriched(self, sku: str, fuente: str = "general") -> Optional[ItemStockEnriched]:
         self._refrescar_si_es_necesario(fuente)
@@ -140,42 +153,76 @@ class ServicioStock:
 
     def _enriquecer_items(self, items: list[ItemStock]) -> list[ItemStockEnriched]:
         """Merge stock items with catalog data."""
+        # Build SKU→index map from catalogue for orden
+        sku_index: dict[str, int] = {}
+        # Build SKU→line_id map from catalogue (each product's SKU prefix IS its line ID)
+        sku_linea_id: dict[str, str] = {}
+        for i, (sku, product) in enumerate(catalog_service._catalog.items()):
+            sku_index[sku] = i
+            sku_linea_id[sku] = sku[:2]
+
         enriched = []
         for item in items:
             cat = catalog_service.buscar(item.sku)
-            linea_id = _extraer_linea_id(item.linea)
             sin_catalogo = cat is None
+
+            # Extract line ID: try item.linea first, then SKU prefix from catalogue
+            linea_id = _extraer_linea_id(item.linea)
+            if not linea_id and cat:
+                linea_id = sku_linea_id.get(item.sku)
+
             if cat:
+                # Build display linea from catalogue data
+                cat_linea = cat.get("linea", "").strip()
+                cat_grupo = cat.get("grupo", "").strip()
+                cat_tipo = cat.get("tipo", "").strip()
+                cat_familia = cat.get("familia", "").strip()
+                cat_categoria = cat.get("categoria", "").strip()
+
+                # XLS data takes priority; catalog fills only empty values or placeholders
+                _PLACEHOLDERS = {"", "TODOS"}
+                display_linea = item.linea if item.linea not in _PLACEHOLDERS else ""
+                display_grupo = item.grupo if item.grupo not in _PLACEHOLDERS else ""
+                display_tipo = item.tipo if item.tipo not in _PLACEHOLDERS else ""
+                display_familia = item.familia if item.familia not in _PLACEHOLDERS else ""
+                display_categoria = item.categoria if item.categoria not in _PLACEHOLDERS else ""
+                # Build display linea: "01 - PELOTAS" only if XLS only has the ID
+                if display_linea and " - " not in display_linea and cat_linea:
+                    display_linea = f"{display_linea} - {cat_linea}"
+                display_grupo = display_grupo or cat_grupo
+                display_tipo = display_tipo or cat_tipo
+                display_familia = display_familia or cat_familia
+                display_categoria = display_categoria or cat_categoria
+
                 enriched.append(ItemStockEnriched(
                     sku=item.sku,
                     descripcion=item.descripcion,
                     um=item.um,
-                    linea=item.linea,
-                    grupo=item.grupo,
-                    tipo=item.tipo,
-                    familia=item.familia,
-                    categoria=item.categoria,
+                    linea=display_linea,
+                    grupo=display_grupo,
+                    tipo=display_tipo,
+                    familia=display_familia,
+                    categoria=display_categoria,
                     un_bx=cat.get("un_bx", 1),
                     peso_kg=cat.get("peso_kg", 0.0),
                     precio=cat.get("precio", 0.0),
                     nombre_corto=cat.get("nombre_corto", ""),
                     ean13=cat.get("ean13", ""),
                     ean14=cat.get("ean14", ""),
-                    estado_linea=cat.get("estado_linea", item.estado_linea or ""),
+                    estado_linea=cat.get("estado_linea", ""),
                     keywords=cat.get("keywords", []),
-                    orden=cat.get("orden", 0),
+                    orden=cat.get("orden", sku_index.get(item.sku, 0)),
                     linea_id=linea_id,
                     sin_catalogo=False,
-                    cantidad_por_caja=cat.get("un_bx", 0),
-                    precio_lista=cat.get("precio", 0.0),
                     almacenes=item.almacenes,
                 ))
             else:
+                display_linea = item.linea or (f"{linea_id} - UNKNOWN" if linea_id else "")
                 enriched.append(ItemStockEnriched(
                     sku=item.sku,
                     descripcion=item.descripcion,
                     um=item.um,
-                    linea=item.linea,
+                    linea=display_linea,
                     grupo=item.grupo,
                     tipo=item.tipo,
                     familia=item.familia,
@@ -186,13 +233,10 @@ class ServicioStock:
                     nombre_corto="",
                     ean13="",
                     ean14="",
-                    estado_linea=item.estado_linea or "",
                     keywords=[],
                     orden=0,
                     linea_id=linea_id,
                     sin_catalogo=True,
-                    cantidad_por_caja=0,
-                    precio_lista=0.0,
                     almacenes=item.almacenes,
                 ))
         return enriched
@@ -217,29 +261,36 @@ class ServicioStock:
             self._datos_sucursales = datos
             self._items_sucursales = self._transformar_items(datos)
             self._fecha_sucursales = datetime.now(timezone.utc)
-            self._cache_expirado_sucursales = False
             self._guardar_cache(settings.cache_ruta2, "sucursales")
         else:
             self._datos_general = datos
             self._items_general = self._transformar_items(datos)
             self._fecha_general = datetime.now(timezone.utc)
-            self._cache_expirado_general = False
             self._guardar_cache(settings.cache_ruta, "general")
-        almacenes = self._listar_almacenes(datos)
-        return len(self._obtener_items_segun_fuente(fuente)), len(almacenes)
+        codigos = self._obtener_codigos_almacen(datos)
+        return len(self._obtener_items_segun_fuente(fuente)), len(codigos)
 
-    def listar_almacenes(self) -> list[dict]:
+    def listar_almacenes(self, tipo: Optional[str] = None) -> list[dict]:
         self._refrescar_si_es_necesario("general")
+        self._refrescar_si_es_necesario("sucursales")
         almacenes_vistos: dict[str, int] = {}
         for item in self._items_general:
             for alm in item.almacenes:
                 almacenes_vistos[alm.almacen] = (
                     almacenes_vistos.get(alm.almacen, 0) + 1
                 )
-        return sorted(
+        for item in self._items_sucursales:
+            for alm in item.almacenes:
+                almacenes_vistos[alm.almacen] = (
+                    almacenes_vistos.get(alm.almacen, 0) + 1
+                )
+        resultado = sorted(
             [{"almacen": k, "total_skus": v, "tipo": _tipo_almacen(k)} for k, v in almacenes_vistos.items()],
             key=lambda x: (0 if x["almacen"] == ALMACEN_PRINCIPAL else 1, x["almacen"]),
         )
+        if tipo and tipo != "todas":
+            resultado = [a for a in resultado if a["tipo"] == tipo]
+        return resultado
 
     def listar_lineas(self) -> list[dict]:
         self._refrescar_si_es_necesario("general")
@@ -437,8 +488,6 @@ class ServicioStock:
                     categoria=data["categoria"],
                     almacenes=almacenes_lista,
                     estado_linea="",
-                    cantidad_por_caja=0,
-                    precio_lista=0.0,
                     linea_id=data["linea_id"],
                     sin_catalogo=False,
                 )
@@ -447,17 +496,18 @@ class ServicioStock:
 
     def _construir_respuesta(
         self,
-        items: list[ItemStock],
+        items: list[ItemStockEnriched],
         fuente: str = "general",
         almacen: Optional[str] = None,
         busqueda: Optional[str] = None,
         linea: Optional[str] = None,
+        grupo: Optional[str] = None,
         um: Optional[str] = None,
         categoria: Optional[str] = None,
         limit: Optional[int] = None,
         offset: int = 0,
-        enrich: bool = False,
-    ) -> StockResponse | StockEnrichedResponse:
+        tipo: Optional[str] = None,
+    ) -> StockEnrichedResponse:
         if almacen:
             almacen_up = almacen.strip().upper()
             items = [
@@ -475,12 +525,22 @@ class ServicioStock:
         if linea:
             q = linea.strip().lower()
             items = [item for item in items if q in item.linea.lower()]
+        if grupo:
+            q = grupo.strip().lower()
+            items = [item for item in items if q in item.grupo.lower()]
         if um:
             q = um.strip().upper()
             items = [item for item in items if item.um == q]
         if categoria:
             q = categoria.strip().upper()
             items = [item for item in items if item.categoria == q]
+        if tipo:
+            tipo_lower = tipo.strip().lower()
+            items = [
+                item
+                for item in items
+                if any(a.tipo == tipo_lower for a in item.almacenes)
+            ]
 
         total = len(items)
         if limit is not None:
@@ -496,38 +556,21 @@ class ServicioStock:
         ref_fecha = self._fecha_sucursales if fuente == "sucursales" else self._fecha_general
         cache_expirado = bool(ref_fecha and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos))
 
-        if enrich:
-            return StockEnrichedResponse(
-                metadata=MetadataStock(
-                    fuente=fuente_label,
-                    fecha_descarga=ref_fecha,
-                    total_skus=total,
-                    total_almacenes=len(self._listar_almacenes(
-                        self._datos_sucursales if fuente == "sucursales" else self._datos_general
-                    )),
-                    cache_expirado=cache_expirado,
-                    cache_expiro_en=settings.cache_ttl_segundos,
-                    offset=offset,
-                    limit=limit,
-                    enriquecido=True,
-                ),
-                items=list(items),
-            )
-
-        return StockResponse(
+        return StockEnrichedResponse(
             metadata=MetadataStock(
                 fuente=fuente_label,
                 fecha_descarga=ref_fecha,
                 total_skus=total,
-                total_almacenes=len(self._listar_almacenes(
+                total_almacenes=len(self._obtener_codigos_almacen(
                     self._datos_sucursales if fuente == "sucursales" else self._datos_general
                 )),
                 cache_expirado=cache_expirado,
                 cache_expiro_en=settings.cache_ttl_segundos,
                 offset=offset,
                 limit=limit,
+                enriquecido=True,
             ),
-            items=items,
+            items=list(items),
         )
 
     def _calcular_resumen(self) -> ResumenStock:
@@ -555,7 +598,7 @@ class ServicioStock:
         )
 
     @staticmethod
-    def _listar_almacenes(datos: dict[str, dict[str, dict]]) -> list[str]:
+    def _obtener_codigos_almacen(datos: dict[str, dict[str, dict]]) -> list[str]:
         return sorted(datos.keys())
 
     def _guardar_cache(self, ruta_cache: str, fuente: str) -> None:

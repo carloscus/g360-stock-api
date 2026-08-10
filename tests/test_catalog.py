@@ -93,13 +93,15 @@ class TestCatalogUpload:
             data = json.load(f)
         catalog_service.cargar_desde_json(data)
 
-        # Cargar stock de prueba
+        # Usar datos en cache (general o sucursales)
         from app.services.s1_service import servicio_stock
-        sample = Path(__file__).parent / "samples" / "REPT_STOCK_SAMPLE.xls"
-        if sample.exists():
-            servicio_stock.procesar_archivo_local(str(sample))
+        if not servicio_stock._items_general:
+            servicio_stock._actualizar_desde_origen("general")
 
-        respuesta = client.get("/api/v1/stock?enrich=true&limit=1")
+        if not servicio_stock._items_general:
+            pytest.skip("No hay datos en cache para probar")
+
+        respuesta = client.get("/api/v1/stock?limit=1")
         assert respuesta.status_code == 200
         datos = respuesta.json()
         assert datos["metadata"]["enriquecido"] is True
@@ -110,7 +112,7 @@ class TestCatalogUpload:
         assert "un_bx" in item
         assert "precio" in item
         assert "ean13" in item
-        assert "estado_linea" in item
+        assert "keywords" in item
 
         # Limpiar
         catalog_service._catalog = {}
@@ -124,13 +126,21 @@ class TestCatalogUpload:
             data = _json.load(f)
         catalog_service.cargar_desde_json(data)
 
-        sku_ejemplo = data["productos"][0]["sku"]
-        respuesta = client.get(f"/api/v1/stock/{sku_ejemplo}", params={"enrich": "true"})
+        # Cargar stock de prueba
+        from app.services.s1_service import servicio_stock
+        sample = Path(__file__).parent / "samples" / "REPT_STOCK_SAMPLE.xls"
+        if sample.exists():
+            servicio_stock.procesar_archivo_local(str(sample))
+        if not servicio_stock._items_general:
+            pytest.skip("No hay datos de stock cargados")
+
+        respuesta = client.get("/api/v1/stock?limit=1")
         assert respuesta.status_code == 200
-        item = respuesta.json()
-        assert item["sku"] == sku_ejemplo
+        datos = respuesta.json()
+        assert len(datos["items"]) >= 1
+        item = datos["items"][0]
         assert "un_bx" in item
-        assert "estado_linea" in item
+        assert "keywords" in item
 
         # Limpiar
         catalog_service._catalog = {}

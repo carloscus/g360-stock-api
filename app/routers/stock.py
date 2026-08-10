@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.models.schemas import ItemStock, ItemStockEnriched, StockResponse, StockEnrichedResponse
+from app.models.schemas import ItemStockEnriched, StockEnrichedResponse
 from app.services.s1_service import servicio_stock
 
 router = APIRouter(tags=["stock"])
@@ -22,15 +22,17 @@ def listar_stock(
     almacen: Optional[str] = Query(None, description="Filtrar por codigo de almacen (ej: VES, 40, 118)"),
     search: Optional[str] = Query(None, description="Buscar por SKU o descripcion del producto"),
     linea: Optional[str] = Query(None, description="Filtrar por linea de producto (ej: PELOTAS, FORROS)"),
+    grupo: Optional[str] = Query(None, description="Filtrar por grupo de producto (ej: NACIONAL, FOLDER)"),
     um: Optional[str] = Query(None, description="Filtrar por unidad de medida (ej: UND, BST, KGR, CJA)"),
     categoria: Optional[str] = Query(None, description="Filtrar por categoria de negocio (ej: VINIBALL, VINIFAN)"),
+    tipo: Optional[str] = Query(None, description="Filtrar por tipo de almacen: venta, mktd"),
     fuente: str = Query("general", description="Fuente de datos: general, sucursales, todas"),
     limit: Optional[int] = Query(None, description="Maximo de items (paginacion). Ej: 100", ge=1, le=5000),
     offset: int = Query(0, description="Items a saltar (paginacion). Ej: 100", ge=0),
 ):
     return servicio_stock.obtener_stock(
-        almacen=almacen, busqueda=search, linea=linea, um=um,
-        categoria=categoria, fuente=fuente, limit=limit, offset=offset, enrich=True,
+        almacen=almacen, busqueda=search, linea=linea, grupo=grupo, um=um,
+        categoria=categoria, tipo=tipo, fuente=fuente, limit=limit, offset=offset,
     )
 
 
@@ -61,10 +63,10 @@ def obtener_sku(
     "/api/v1/almacenes",
     summary="Listar almacenes disponibles",
     description="Devuelve la lista de codigos de almacen con la cantidad "
-    "de SKU que tienen stock registrado en cada uno.",
+    "de SKU que tienen stock registrado en cada uno. Opcionalmente filtra por tipo: venta, mktd o todas.",
 )
-def listar_almacenes():
-    return servicio_stock.listar_almacenes()
+def listar_almacenes(tipo: Optional[str] = Query(None, description="Filtrar por tipo: venta, mktd, todas")):
+    return servicio_stock.listar_almacenes(tipo=tipo)
 
 
 @router.get(

@@ -10,13 +10,14 @@ from app.core.constants import (
     COLUMNA_STOCK,
     COLUMNA_PREDESPACHO,
     FILAS_METADATA,
+    COLUMNA_CATEGORIA,
     PREFIJOS_CATEGORIA,
     PALABRAS_TOTAL,
     PALABRAS_SALTAR,
 )
 from app.core.xls_fallback import leer_xls
 
-PATRON_CATEGORIA = re.compile(r"^(LINEA|GRUPO|TIPO|FAMILIA):\s*([\dA-Za-z]+)\s*-\s*(.+)$")
+PATRON_CATEGORIA = re.compile(r"^(LINEA|GRUPO|TIPO|FAMILIA):\s*([\dA-Za-z]+)(?:\s*-\s*(.+))?$")
 
 
 def parsear_stock_desde_xls(
@@ -38,23 +39,33 @@ def parsear_stock_desde_xls(
 
     tiene_categorias = _detectar_formato_con_categorias(filas)
 
+    # Pre-scan ALL rows for category headers before data rows start
+    if tiene_categorias:
+        for fila in filas:
+            if len(fila) > COLUMNA_CATEGORIA:
+                cell = str(fila[COLUMNA_CATEGORIA] or "").strip()
+                if _es_fila_categoria(cell):
+                    linea_actual, grupo_actual, tipo_actual, familia_actual = (
+                        _extraer_categorias(cell, linea_actual, grupo_actual, tipo_actual, familia_actual)
+                    )
+
     for fila in filas[FILAS_METADATA:]:
         if len(fila) < 17:
             continue
+
+        # Check categoria column in this row for header rows
+        if tiene_categorias and len(fila) > COLUMNA_CATEGORIA:
+            cell = str(fila[COLUMNA_CATEGORIA] or "").strip()
+            if _es_fila_categoria(cell):
+                linea_actual, grupo_actual, tipo_actual, familia_actual = (
+                    _extraer_categorias(cell, linea_actual, grupo_actual, tipo_actual, familia_actual)
+                )
 
         raw_sku = str(fila[COLUMNA_SKU] or "").strip().lstrip("'")
         sku_mayus = raw_sku.upper()
 
         if sku_mayus in PALABRAS_TOTAL:
             ultimo_sku = ""
-            continue
-
-        if tiene_categorias and _es_fila_categoria(raw_sku):
-            linea_actual, grupo_actual, tipo_actual, familia_actual = (
-                _extraer_categorias(
-                    raw_sku, linea_actual, grupo_actual, tipo_actual, familia_actual
-                )
-            )
             continue
 
         if raw_sku and sku_mayus not in PALABRAS_SALTAR:
@@ -101,10 +112,10 @@ def parsear_stock_desde_xls(
 
 
 def _detectar_formato_con_categorias(filas: list[list[str]]) -> bool:
-    for fila in filas[FILAS_METADATA:]:
-        if len(fila) < 2:
+    for fila in filas:
+        if len(fila) <= COLUMNA_CATEGORIA:
             continue
-        texto = str(fila[COLUMNA_SKU] or "").strip().upper()
+        texto = str(fila[COLUMNA_CATEGORIA] or "").strip().upper()
         if any(texto.startswith(p) for p in PREFIJOS_CATEGORIA):
             return True
     return False
@@ -128,15 +139,24 @@ def _extraer_categorias(
         return linea_actual, grupo_actual, tipo_actual, familia_actual
 
     nivel = coincide.group(1).upper()
-    valor = f"{coincide.group(2)} - {coincide.group(3)}"
+    codigo = coincide.group(2).strip()
+    nombre = (coincide.group(3) or "").strip()
+
+    # Skip placeholder values like "TODOS"
+    if nombre.upper() == "TODOS":
+        nombre = ""
 
     if nivel == "LINEA":
+        valor = f"{codigo} - {nombre}" if nombre else codigo
         return valor, "", "", ""
     elif nivel == "GRUPO":
+        valor = f"{codigo} - {nombre}" if nombre else codigo
         return linea_actual, valor, "", ""
     elif nivel == "TIPO":
+        valor = f"{codigo} - {nombre}" if nombre else codigo
         return linea_actual, grupo_actual, valor, ""
     elif nivel == "FAMILIA":
+        valor = f"{codigo} - {nombre}" if nombre else codigo
         return linea_actual, grupo_actual, tipo_actual, valor
 
     return linea_actual, grupo_actual, tipo_actual, familia_actual

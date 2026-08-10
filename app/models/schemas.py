@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class AlmacenStock(BaseModel):
     almacen: str = Field(..., description="Codigo del almacen")
-    tipo: str = Field(default="venta", description="Tipo de almacen: venta, informativo, sucursal")
+    tipo: str = Field(default="venta", description="Tipo de almacen: venta, mktd")
     disponible: int = Field(..., ge=0, description="Stock disponible (stock - predespacho)")
     stock: int = Field(..., ge=0, description="Stock fisico en almacen")
     predespacho: int = Field(..., ge=0, description="Unidades predespachadas/comprometidas")
@@ -25,8 +25,6 @@ class ItemStock(BaseModel):
     categoria: str = Field(default="", description="Categoria de negocio (VINIBALL, VINIFAN, REPRESENTADAS)")
     almacenes: list[AlmacenStock] = Field(default_factory=list)
     estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO)")
-    cantidad_por_caja: int = Field(0, description="Unidades por caja (un_bx)")
-    precio_lista: float = Field(0.0, description="Precio de lista")
     linea_id: Optional[str] = Field(None, description="Short line identifier (e.g. '01', 'AD', '78')")
     sin_catalogo: bool = Field(False, description="True si el producto no tiene datos de catalogo maestro")
 
@@ -38,11 +36,8 @@ class ItemStockEnriched(ItemStock):
     nombre_corto: str = Field(default="", description="Nombre corto generado")
     ean13: str = Field(default="", description="Codigo de barras EAN-13")
     ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
-    estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO, TRADICIONAL)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
-    linea_id: Optional[str] = Field(None, description="Short line identifier extracted from linea code (e.g. '01' from '0101 - PELOTAS', 'AD' from '01AD - ACCESORIOS DEPORTIVOS')")
-    sin_catalogo: bool = Field(False, description="True si el producto no tiene datos de catalogo maestro")
 
 
 class MetadataStock(BaseModel):
@@ -55,11 +50,6 @@ class MetadataStock(BaseModel):
     offset: Optional[int] = Field(None, description="Offset aplicado en la paginacion")
     limit: Optional[int] = Field(None, description="Limite aplicado en la paginacion")
     enriquecido: bool = Field(False, description="Indica si se sirvio con datos del catalogo")
-
-
-class StockResponse(BaseModel):
-    metadata: MetadataStock
-    items: list[ItemStock] = Field(default_factory=list, description="Lista de productos con stock")
 
 
 class StockEnrichedResponse(BaseModel):
@@ -89,6 +79,12 @@ class HealthResponse(BaseModel):
 class UploadResponse(BaseModel):
     mensaje: str = Field(..., description="Resultado de la carga")
     total_skus: int = Field(0, description="SKU procesados")
+    total_almacenes: int = Field(0, description="Almacenes encontrados")
+
+
+class CatalogUploadResponse(BaseModel):
+    mensaje: str = Field(..., description="Resultado de la carga")
+    total_skus: int = Field(0, description="SKU cargados en el catalogo")
     con_ean14: int = Field(0, description="SKU con EAN-14")
     con_unbx: int = Field(0, description="SKU con un_bx > 1")
 

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import json
-from fastapi import APIRouter, HTTPException, Query, UploadFile, File
+from fastapi import APIRouter, HTTPException, UploadFile, File
 
-from app.models.schemas import CatalogHealthResponse, UploadResponse
+from app.models.schemas import CatalogHealthResponse, CatalogUploadResponse
 from app.services.catalog_service import catalog_service
 
 router = APIRouter(tags=["catalog"])
@@ -11,7 +11,7 @@ router = APIRouter(tags=["catalog"])
 
 @router.post(
     "/api/v1/catalog/upload",
-    response_model=UploadResponse,
+    response_model=CatalogUploadResponse,
     summary="Subir catalogo de productos",
     description="Sube un archivo JSON generado por g360-master-data. "
                 "El catalogo se carga en memoria y se usa para enriquecer "
@@ -29,7 +29,7 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
         raise HTTPException(status_code=422, detail=f"JSON invalido: {e}")
 
     result = catalog_service.cargar_desde_json(data)
-    return UploadResponse(
+    return CatalogUploadResponse(
         mensaje="Catalogo cargado correctamente",
         total_skus=result["total_skus"],
         con_ean14=result["con_ean14"],

@@ -1,55 +1,67 @@
 # G360 Stock API
 
-API REST para el reporte de stock **S1** desde **appweb.cipsa.com.pe**. Descarga el archivo XLS del ERP, lo parsea y lo sirve como JSON estructurado por SKU y almacen, enriquecido con unidad de medida y jerarquia de categorias (LINEA / GRUPO / TIPO / FAMILIA).
+API REST para el reporte de stock **S1** desde **appweb.cipsa.com.pe**. Descarga los archivos XLS del ERP (general + sucursales), los parsea y los sirve como JSON estructurado por SKU y almacen, enriquecido con datos del catalogo maestro.
 
 ## Arquitectura
 
 ```
 appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache.json
                     ──XLS──▶                  ──▶ data/stock_cache_sucursales.json
-                                 │
-                            JSON responses
-                         (GET /api/v1/stock*)
+                     (general)                 (sucursales)
+                                   │
+                      g360-master-data ──JSON──▶ data/catalog_cache.json
+                                   │
+                              JSON responses
+                           (GET /api/v1/stock*)
 ```
 
 - **Sin base de datos.** Cache en disco con backup rotativo (`.bak`) y TTL configurable.
-- **Dos fuentes.** General (VES, 40, 118...) y Sucursales (S1, S2, S3...) desde distintas URLs.
+- **Dos fuentes de stock.** General (VES, 40, 118...) y Sucursales (S1, S2, S3...).
+- **Catalogo maestro.** Cargado desde `g360-master-data` (JSON) para enriquecimiento. Auto-descarga desde GitHub en Render free.
 - **Horario laboral L–S 7:00–22:59.** Fuera de ese rango y domingos no se descarga, se sirve cache vencido.
 - **Stale cache.** Si appweb falla, se sirve cache vencido sin reintentar hasta el proximo TTL.
 - **Retry.** Reintenta 1 vez ante timeout de red.
 - **Thread-safe.** Lock de descarga para evitar duplicados en concurrencia.
-- **8 almacenes, 3000+ SKUs, 34 lineas de producto** en el reporte completo.
 
 ## Endpoints
 
 | Metodo | Ruta | Descripcion |
 |--------|------|-------------|
 | `GET` | `/api/v1/health` | Estado del servicio y cache |
-| `GET` | `/api/v1/stock` | Listar stock completo con filtros |
+| `GET` | `/api/v1/stock` | Listar stock completo con filtros (siempre enriquecido) |
 | `GET` | `/api/v1/stock/{sku}` | Detalle de un SKU con desglose por almacen |
-| `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles |
+| `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles (filtro por tipo) |
 | `GET` | `/api/v1/lineas` | Lista de lineas de producto |
 | `GET` | `/api/v1/categorias` | Lista de categorias de negocio con sus lineas |
-| `POST` | `/api/v1/catalog/upload` | Subir catalogo maestro JSON |
+| `GET` | `/api/v1/resumen` | Resumen y KPIs del stock |
+| `POST` | `/api/v1/upload/stock` | Subir archivo XLS manualmente |
+| `POST` | `/api/v1/upload/catalog` | Subir catalogo maestro JSON |
+| `GET` | `/api/v1/catalog/health` | Estado del catalogo cargado |
 
 ### Parametros de GET /api/v1/stock
 
 | Parametro | Tipo | Ejemplo | Descripcion |
 |-----------|------|---------|-------------|
-| `key` | string | `cipsa2026` | API Key (obligatorio) |
 | `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen |
 | `search` | string | `CRACKCITO` | Buscar por SKU o descripcion |
-| `linea` | string | `01`, `PELOTAS`, `78` | Filtrar por linea (tolerante) |
+| `linea` | string | `01`, `PELOTAS`, `78`, `AD` | Filtrar por linea (tolerante) |
+| `grupo` | string | `NACIONAL`, `FOLDER` | Filtrar por grupo de producto |
 | `categoria` | string | `VINIBALL`, `VINIFAN` | Filtrar por categoria de negocio |
+| `tipo` | string | `venta`, `mktd` | Filtrar por tipo de almacen |
 | `um` | string | `UND`, `KGR`, `BST` | Filtrar por unidad de medida |
 | `fuente` | string | `general`, `sucursales`, `todas` | Fuente de datos (default: `general`) |
-| `limit` | int | `100` | Maximo de items a retornar |
+| `limit` | int | `100` | Maximo de items a retornar (max 5000) |
 | `offset` | int | `100` | Paginacion |
-| `enrich` | bool | `true` | Incluir datos del catalogo maestro |
+
+### Parametros de GET /api/v1/almacenes
+
+| Parametro | Tipo | Ejemplo | Descripcion |
+|-----------|------|---------|-------------|
+| `tipo` | string | `venta`, `mktd`, `todas` | Filtrar por tipo de almacen |
 
 ### Formato de respuesta
 
-**Base** (`?enrich=false`): Campos basicos de stock + `linea_id`, `sin_catalogo`
+**GET /api/v1/stock/011019:**
 
 ```json
 {
@@ -62,33 +74,19 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
   "tipo": "02 - SEMI-DEPORTIVA",
   "familia": "01 - FUTBOL",
   "categoria": "VINIBALL",
-  "estado_linea": "",
-  "cantidad_por_caja": 0,
-  "precio_lista": 0.0,
-  "sin_catalogo": false,
-  "almacenes": [...]
-}
-```
-
-**Enriched** (`?enrich=true`): + campos del catalogo maestro
-
-```json
-{
-  "sku": "011019",
-  "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
-  "um": "UND",
-  "linea": "01 - PELOTAS",
-  "linea_id": "01",
-  "categoria": "VINIBALL",
-  "almacenes": [...],
+  "almacenes": [
+    { "almacen": "VES", "tipo": "venta",  "stock": 6552, "predespacho": 1320, "disponible": 5232 },
+    { "almacen": "118", "tipo": "mktd",   "stock": 4,     "predespacho": 0,    "disponible": 4 },
+    { "almacen": "40",  "tipo": "venta",  "stock": 36,    "predespacho": 0,    "disponible": 36 }
+  ],
+  "estado_linea": "NACIONAL",
   "un_bx": 60,
   "peso_kg": 0.2,
   "precio": 9.16,
   "nombre_corto": "Semideportiva Futbol Crackcito Blanco C/Rojo",
   "ean13": "7754807110198",
   "ean14": "",
-  "estado_linea": "NACIONAL",
-  "keywords": ["BLANCO", "C/ROJO", "CRACKCITO", ...],
+  "keywords": ["BLANCO", "C/ROJO", "CRACKCITO", "FUTBOL", "PELOTAS", "SEMIDEPORTIVA", "VINIBALL"],
   "orden": 2,
   "sin_catalogo": false
 }
@@ -98,16 +96,43 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 
 | Input | Resuelve | Ejemplo |
 |-------|----------|---------|
-| Linea `78` | `0178 - ARCHIVO` | padding a 4 digitos + match por prefijo |
-| Linea `01` | `0101 - PELOTAS` | idem |
-| Linea `PELOTAS` | `0101 - PELOTAS` | busqueda por texto libre |
+| Linea `78` | `78 - ARCHIVO` | match por ID normalizado |
+| Linea `01` | `01 - PELOTAS` | idem |
+| Linea `AD` | `AD - ACCESORIOS DEPORTIVOS` | idem |
+| Linea `PELOTAS` | `01 - PELOTAS` | busqueda por texto libre |
 | SKU parcial | match en SKU y descripcion | via `?search=` |
+
+## Tipos de almacen
+
+| Tipo | Almacenes |
+|------|-----------|
+| `venta` | VES, 40, 92, 106, 121, 122, 129 |
+| `mktd` | 118, S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 |
+
+El tipo se refleja en cada item del array `almacenes[].tipo`. El endpoint `/almacenes` permite filtrar por tipo con `?tipo=venta` o `?tipo=mktd`.
+
+## Fuentes de datos
+
+| Fuente | URL appweb | Almacenes | Cache |
+|--------|-----------|-----------|-------|
+| `general` | `parametroX2=""` | VES, 40, 92, 106, 121, 122, 129, 118 | `data/stock_cache.json` |
+| `sucursales` | `parametroX2="1"` | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 | `data/stock_cache_sucursales.json` |
+| `todas` | ambas | ambos | ambas |
+
+## Catalogo maestro
+
+El catalogo se carga desde `g360-master-data` (JSON generado externamente):
+- **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
+- **Auto-carga** — al iniciar, si no hay catalogo en disco, se descarga desde GitHub raw
+- **TTL** — 6 horas (21600s)
+- **Campos usados**: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
 
 ## Cache
 
-Dos archivos de cache en `data/`:
+Archivos de cache en `data/`:
 - `stock_cache.json` — fuente general
 - `stock_cache_sucursales.json` — fuente sucursales
+- `catalog_cache.json` — catalogo maestro
 
 Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
 
@@ -119,49 +144,52 @@ Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
 4. **Cache vencido + horario invalido** → sirve cache vencido
 5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min
 
-## Ejemplo de respuesta
+## Lineas de producto
 
-```
-GET /api/v1/stock?categoria=VINIBALL&limit=1
-```
+| Linea | ID | Categoria | SKUs |
+|-------|----|-----------|------|
+| PELOTAS | 01 | VINIBALL | 298 |
+| ARCHIVO | 78 | VINIFAN | 318 |
+| ACCESORIOS | 79 | VINIFAN | 96 |
+| PUBLICIDAD | 80 | PUBLICIDAD | 112 |
+| REPRESENTADAS | 85 | REPRESENTADAS | 195 |
+| ESCRITURA | 76 | VINIFAN | 160 |
+| PINTURA | 77 | VINIFAN | 103 |
+| PRODUCTOS INDUSTRIALES | 20 | INDUSTRIAL | 181 |
+| REPRESENTACIONES INDUSTRIALES | 21 | INDUSTRIAL | 201 |
+| INDUMENTARIA Y EPP | 57 | INDUMENTARIA | 162 |
+| METALICA | 11 | VINIFAN | 36 |
+| PEGAMENTOS | 72 | VINIFAN | 22 |
+| SENSORIALES | 09 | VINIFAN | 4 |
+| DIBUJO | 75 | VINIFAN | 20 |
+| FORROS | 02 | VINIFAN | 28 |
+| DIDACTICOS | 73 | VINIFAN | 31 |
+| MASCOTAS | MA | VINIBALL | 10 |
+| KITS | 81 | PUBLICIDAD | 7 |
+| VARIOS | 99 | DESCARTE Y VARIOS | 50 |
+| OTROS | 14 | OTROS | 15 |
+| SEGURIDAD Y SEÑALIZACION VIAL | 23 | INDUSTRIAL | 37 |
+| CIPTECH ETIQUETAS | 30 | CIPTECH | 12 |
+| CIPTECH CINTAS | 31 | CIPTECH | 5 |
+| CIPTECH CIL | 33 | CIPTECH | 1 |
+| CIPTECH SUPPLY CHAIN | 35 | CIPTECH | 2 |
+| MATERIA PRIMA | 40 | MATERIALES | 20 |
+| MATERIALES AUXILIARES | 50 | MATERIALES | 40 |
+| INSUMOS LIMPIEZA Y SEGURIDAD | 52 | INDUMENTARIA | 1 |
+| SCRAP | 60 | DESCARTE Y VARIOS | 1 |
+| MERCADERIAS VARIAS | 65 | DESCARTE Y VARIOS | 37 |
+| PRODUCTOS EN PROCESO | 70 | PRODUCCION | 9 |
+| ACCESORIOS DEPORTIVOS | AD | VINIBALL | 1 |
+| MANUALIDADES | CE | VINIFAN | 8 |
+| SET | CF | VINIFAN | 2 |
 
-```json
-{
-  "metadata": {
-    "fuente": "General (VES, 40, 118...)",
-    "fecha_descarga": "2026-07-30T18:32:00Z",
-    "total_skus": 312,
-    "total_almacenes": 8,
-    "cache_expirado": false,
-    "cache_expiro_en": 900
-  },
-  "items": [
-    {
-      "sku": "011019",
-      "descripcion": "N SEMIDEPORTIVA FUTBOL CRACKCITO BLANCO C/ROJO",
-      "um": "UND",
-      "linea": "01 - PELOTAS",
-      "linea_id": "01",
-      "grupo": "01 - NACIONAL",
-      "tipo": "02 - SEMI-DEPORTIVA",
-      "familia": "01 - FUTBOL",
-      "categoria": "VINIBALL",
-      "sin_catalogo": false,
-      "almacenes": [
-        { "almacen": "VES", "tipo": "venta", "disponible": 6672, "stock": 7212, "predespacho": 540 },
-        { "almacen": "118", "tipo": "informativo", "disponible": 4, "stock": 4, "predespacho": 0 },
-        { "almacen": "40", "tipo": "venta", "disponible": 36, "stock": 36, "predespacho": 0 }
-      ]
-    }
-  ]
-}
-```
+Total: **2,184 SKUs** en fuente general, **798 SKUs** en sucursales, **2,982 SKUs** combinados.
 
 ## Categorias de negocio
 
-| Categoria | Lineas (ID normalizado) |
-|-----------|------------------------|
-| VINIBALL | 01 (PELOTAS), MA (MASCOTAS), 14 (OTROS), AD (ACC. DEPORTIVOS) |
+| Categoria | Lineas (ID) |
+|-----------|-------------|
+| VINIBALL | 01, MA, 14, AD |
 | VINIFAN | 02, 09, 11, 72–79, CE, CF |
 | INDUSTRIAL | 20, 21, 23 |
 | CIPTECH | 30, 31, 33, 35 |
@@ -173,36 +201,32 @@ GET /api/v1/stock?categoria=VINIBALL&limit=1
 | DESCARTE Y VARIOS | 60, 65, 98 |
 | OTROS | default |
 
-### Linea ID
-
-El campo `linea_id` extrae el identificador corto de la linea:
-- `0101 - PELOTAS` → `linea: "01 - PELOTAS"`, `linea_id: "01"`
-- `01AD - ACCESORIOS DEPORTIVOS` → `linea: "AD - ACCESORIOS DEPORTIVOS"`, `linea_id: "AD"`
-- `0178 - ARCHIVO` → `linea: "78 - ARCHIVO"`, `linea_id: "78"`
-
 ## Estructura del proyecto
 
 ```
 g360-stock-api/
 ├── app/
 │   ├── core/
-│   │   ├── constants.py      # Mapeo de columnas, categorias, prefijos
-│   │   ├── parsers.py         # Parser dual (completo + resumen) con categorias, UM, lineas alfanumericas
-│   │   └── xls_fallback.py    # Lector XLS multiformato
+│   │   ├── constants.py      # Columnas XLS, categorias, lineas, almacenes, prefijos
+│   │   ├── parsers.py         # Parser XLS con headers de categoria (LINEA/GRUPO/TIPO/FAMILIA)
+│   │   └── xls_fallback.py    # Lector XLS multiformato (openpyxl, xlrd, csv, html, xml)
 │   ├── models/
-│   │   └── schemas.py         # Pydantic models: ItemStock, StockResponse, etc.
+│   │   └── schemas.py         # Pydantic models (ItemStockEnriched, StockEnrichedResponse, etc.)
 │   ├── routers/
 │   │   ├── health.py          # GET /api/v1/health
 │   │   ├── stock.py           # GET /api/v1/stock, /{sku}, /lineas, /almacenes, /categorias
-│   │   ├── upload.py          # POST /api/v1/upload
-│   │   └── resumen.py         # GET /api/v1/resumen
+│   │   ├── upload.py          # POST /api/v1/upload (XLS manual)
+│   │   ├── resumen.py         # GET /api/v1/resumen
+│   │   └── catalog.py         # POST /api/v1/catalog/upload, GET /api/v1/catalog/health
 │   ├── services/
-│   │   └── s1_service.py      # Logica de negocio: descarga, parseo, cache dual, filtros, horario, retry
-│   ├── config.py              # Settings via pydantic-settings (2 fuentes, 2 caches, TTL, horario)
-│   └── main.py                # FastAPI app con CORS y routers
+│   │   ├── s1_service.py      # Logica: descarga, parseo, cache dual, enriquecimiento, filtros
+│   │   └── catalog_service.py # Gestion del catalogo maestro en memoria con TTL
+│   ├── config.py              # Settings via pydantic-settings
+│   └── main.py                # FastAPI app con CORS, auth y routers
 ├── tests/
-│   ├── samples/               # REPT_STOCK_SAMPLE.xls (431 filas, 5 almacenes)
+│   ├── samples/               # REPT_STOCK_SAMPLE.xls (reemplazado por reporte completo)
 │   ├── test_api.py            # Tests de integracion
+│   ├── test_catalog.py        # Tests de catalogo (upload, health, enrich)
 │   └── test_parsers.py        # Tests de parser
 ├── data/                      # Cache JSON + .bak (gitignored)
 ├── stock_cipsa.yaml           # Blueprint Render
@@ -219,10 +243,13 @@ Variables de entorno (prefix `S1_`):
 |----------|---------|-------------|
 | `S1_API_KEY` | `""` | API Key para proteger endpoints. Vacío = sin auth |
 | `S1_SOURCE1_URL` | URL appweb | Fuente general (parametroX2="") |
-| `S1_SOURCE2_URL` | URL appweb | Fuente sucursales (parametroX2=1) |
-| `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache en segundos (15 min) |
+| `S1_SOURCE2_URL` | URL appweb | Fuente sucursales (parametroX2="1") |
+| `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache de stock (15 min) |
 | `S1_CACHE_RUTA` | `data/stock_cache.json` | Cache de fuente general |
 | `S1_CACHE_RUTA2` | `data/stock_cache_sucursales.json` | Cache de fuente sucursales |
+| `S1_CATALOGO_RUTA` | `data/catalog_cache.json` | Cache del catalogo maestro |
+| `S1_CATALOGO_TTL_SEGUNDOS` | `21600` | TTL del catalogo (6 horas) |
+| `S1_CATALOGO_RAW_URL` | URL GitHub | Fuente remota del catalogo para auto-carga |
 | `S1_PUERTO` | `8000` | Puerto del servidor |
 
 ### Autenticacion (opcional)
@@ -250,12 +277,14 @@ Documentacion interactiva en `http://localhost:8000/docs`.
 pytest tests/ -v
 ```
 
-22 tests que cubren:
-- Parseo de XLS (formato resumen y completo, con lineas alfanumericas)
-- Filtros por almacen, busqueda, linea, UM, categoria
+Tests que cubren:
+- Parseo de XLS (formato con headers de categoria en columnas separadas)
+- Filtros por almacen, busqueda, linea, grupo, categoria, tipo, UM
 - Calculo de disponible (stock - predespacho, nunca negativo)
-- Cache, backup .bak, upload y fallback
-- 404, health, almacenes, lineas, categorias
+- Enriquecimiento con catalogo maestro (linea_id, ean, precio, keywords, etc.)
+- Cache, backup .bak, upload de XLS y catalogo
+- Health, almacenes (con filtro por tipo), lineas, categorias
+- 404, subida sin archivo, catalog health
 
 ## Deploy en Render
 
@@ -265,8 +294,6 @@ El repositorio incluye `stock_cipsa.yaml` (Blueprints). Pasos:
 2. Render Dashboard → New → Blueprint → seleccionar repositorio
 3. Render detecta `stock_cipsa.yaml` y configura automaticamente
 4. Opcional: ajustar variables de entorno en Render Dashboard
-
-Servicio desplegado en: `https://g360-stock-api.onrender.com`
 
 ## Licencia
 

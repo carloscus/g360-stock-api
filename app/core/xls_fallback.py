@@ -8,12 +8,16 @@ from typing import Optional
 
 
 def leer_xls(path: str) -> Optional[list[list[str]]]:
+    """Lee un archivo XLS/XLSX/CVS/HTML/XML y retorna sus filas como lista de listas de strings.
+    Intenta varios motores de parseo en orden; el primero que devuelva datos gana.
+    """
     path_obj = Path(path)
     if not path_obj.exists():
         return None
 
     raw = path_obj.read_bytes()
 
+    # Motores en orden de preferencia: xlsx -> xls -> csv -> html -> xml
     motores = [
         ("openpyxl", lambda: _leer_con_openpyxl(raw)),
         ("xlrd", lambda: _leer_con_xlrd(raw)),
@@ -39,6 +43,7 @@ def leer_xls(path: str) -> Optional[list[list[str]]]:
 
 
 def _leer_con_openpyxl(raw: bytes) -> Optional[list[list[str]]]:
+    """Parsea archivos .xlsx usando openpyxl (lectura solo)."""
     import openpyxl
 
     libro = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
@@ -51,6 +56,7 @@ def _leer_con_openpyxl(raw: bytes) -> Optional[list[list[str]]]:
 
 
 def _leer_con_xlrd(raw: bytes) -> Optional[list[list[str]]]:
+    """Parsea archivos .xls usando xlrd."""
     import xlrd
 
     libro = xlrd.open_workbook(file_contents=raw)
@@ -64,12 +70,14 @@ def _leer_con_xlrd(raw: bytes) -> Optional[list[list[str]]]:
 
 
 def _leer_con_csv(raw: bytes) -> Optional[list[list[str]]]:
+    """Parsea archivos CSV (con deteccion automatica de BOM UTF-8)."""
     contenido = raw.decode("utf-8-sig", errors="replace")
     lector = csv.reader(io.StringIO(contenido))
     return [fila for fila in lector]
 
 
 def _leer_con_html(raw: bytes) -> Optional[list[list[str]]]:
+    """Parsea tablas HTML embebidas (formato que usa appweb.cipsa.com.pe)."""
     from bs4 import BeautifulSoup
 
     contenido = raw.decode("utf-8", errors="replace")
@@ -86,6 +94,7 @@ def _leer_con_html(raw: bytes) -> Optional[list[list[str]]]:
 
 
 def _leer_con_xml_spreadsheet(raw: bytes) -> Optional[list[list[str]]]:
+    """Parsea archivos XML de spreadsheet (formato antiguo de Excel)."""
     ESPACIOS = {
         "ss": "urn:schemas-microsoft-com:office:spreadsheet",
         "o": "urn:schemas-microsoft-com:office:office",

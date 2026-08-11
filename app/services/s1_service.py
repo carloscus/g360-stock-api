@@ -35,9 +35,9 @@ LIMA_TZ = timezone(timedelta(hours=-5))
 
 
 def _extraer_linea_id(linea: str) -> Optional[str]:
-    """Extract short line ID from linea code.
-    Works with: '0101' -> '01', '0101 - PELOTAS' -> '01',
-    '01 - PELOTAS' -> '01', 'AD - ACCESORIOS' -> 'AD', '78' -> '78', 'MA' -> 'MA'
+    """Extrae el identificador corto de la linea a partir del codigo.
+    Soporta: '0101' -> '01', '0101 - PELOTAS' -> '01',
+    'AD - ACCESORIOS' -> 'AD', '78' -> '78', 'MA' -> 'MA'
     """
     if not linea:
         return None
@@ -70,8 +70,8 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
 
 
 def _normalizar_linea(linea: str) -> str:
-    """Normalize line format for display.
-    Handles: '0101' -> '01', '0101 - PELOTAS' -> '01 - PELOTAS',
+    """Normaliza el formato de la linea para display.
+    Maneja: '0101' -> '01', '0101 - PELOTAS' -> '01 - PELOTAS',
     '01AD - ACCESORIOS' -> 'AD - ACCESORIOS', '01 - PELOTAS' -> '01 - PELOTAS'
     """
     if not linea:
@@ -153,9 +153,9 @@ class ServicioStock:
 
     def _enriquecer_items(self, items: list[ItemStock]) -> list[ItemStockEnriched]:
         """Merge stock items with catalog data."""
-        # Build SKU→index map from catalogue for orden
+        # Construir mapa SKU->indice del catalogo para orden
         sku_index: dict[str, int] = {}
-        # Build SKU→line_id map from catalogue (each product's SKU prefix IS its line ID)
+        # Construir mapa SKU->linea_id del catalogo (el prefijo del SKU es su ID de linea)
         sku_linea_id: dict[str, str] = {}
         for i, (sku, product) in enumerate(catalog_service._catalog.items()):
             sku_index[sku] = i
@@ -166,27 +166,27 @@ class ServicioStock:
             cat = catalog_service.buscar(item.sku)
             sin_catalogo = cat is None
 
-            # Extract line ID: try item.linea first, then SKU prefix from catalogue
+            # Extraer ID de linea: primero intenta item.linea, luego prefijo del SKU desde catalogo
             linea_id = _extraer_linea_id(item.linea)
             if not linea_id and cat:
                 linea_id = sku_linea_id.get(item.sku)
 
             if cat:
-                # Build display linea from catalogue data
+                # Construir linea de display a partir de datos del catalogo
                 cat_linea = cat.get("linea", "").strip()
                 cat_grupo = cat.get("grupo", "").strip()
                 cat_tipo = cat.get("tipo", "").strip()
                 cat_familia = cat.get("familia", "").strip()
                 cat_categoria = cat.get("categoria", "").strip()
 
-                # XLS data takes priority; catalog fills only empty values or placeholders
+                # Los datos del XLS tienen prioridad; el catalogo llena solo valores vacios o placeholders
                 _PLACEHOLDERS = {"", "TODOS"}
                 display_linea = item.linea if item.linea not in _PLACEHOLDERS else ""
                 display_grupo = item.grupo if item.grupo not in _PLACEHOLDERS else ""
                 display_tipo = item.tipo if item.tipo not in _PLACEHOLDERS else ""
                 display_familia = item.familia if item.familia not in _PLACEHOLDERS else ""
                 display_categoria = item.categoria if item.categoria not in _PLACEHOLDERS else ""
-                # Build display linea: "01 - PELOTAS" only if XLS only has the ID
+                # Construir linea de display: "01 - PELOTAS" solo si el XLS tiene solo el ID
                 if display_linea and " - " not in display_linea and cat_linea:
                     display_linea = f"{display_linea} - {cat_linea}"
                 display_grupo = display_grupo or cat_grupo
@@ -374,7 +374,7 @@ class ServicioStock:
             else:
                 fecha = self._fecha_general
                 hay_items = bool(self._items_general)
-            # Si otro hilo ya refresco mientras esperabamos el lock, salir
+            # Si otro hilo ya actualizo mientras esperamos el lock, salir
             if fecha and datetime.now(timezone.utc) - fecha < timedelta(seconds=settings.cache_ttl_segundos):
                 return
             try:

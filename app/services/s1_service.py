@@ -568,7 +568,7 @@ class ServicioStock:
                 cache_expiro_en=settings.cache_ttl_segundos,
                 offset=offset,
                 limit=limit,
-                enriquecido=True,
+                enriquecido=catalog_service.cargado,
             ),
             items=list(items),
         )

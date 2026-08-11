@@ -51,8 +51,8 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 | Parametro | Tipo | Ejemplo | Descripcion |
 |-----------|------|---------|-------------|
 | `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen |
-| `search` | string | `CRACKCITO` | Buscar por SKU o descripcion |
-| `linea` | string | `01`, `PELOTAS`, `78`, `AD` | Filtrar por linea (tolerante) |
+| `search` | string | `CRACKCITO` | Buscar por SKU o descripcion (texto libre) |
+| `linea` | string | `01`, `PELOTAS`, `78`, `AD` | Filtrar por linea (tolerante: ID o nombre) |
 | `grupo` | string | `NACIONAL`, `FOLDER` | Filtrar por grupo de producto |
 | `categoria` | string | `VINIBALL`, `VINIFAN` | Filtrar por categoria de negocio |
 | `tipo` | string | `venta`, `mktd` | Filtrar por tipo de almacen |
@@ -61,11 +61,132 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 | `limit` | int | `100` | Maximo de items a retornar (max 5000) |
 | `offset` | int | `100` | Paginacion |
 
-### Parametros de GET /api/v1/almacenes
+### Guia rapida de consultas
 
-| Parametro | Tipo | Ejemplo | Descripcion |
-|-----------|------|---------|-------------|
-| `tipo` | string | `venta`, `mktd`, `todas` | Filtrar por tipo de almacen |
+Esta seccion explica como combinar los filtros y que resultado esperar.
+
+#### Filtro por tipo de almacen (`tipo`)
+
+Clasifica automaticamente cada almacen en dos grupos:
+
+| Valor | Que incluye | Ejemplo de uso |
+|-------|-------------|----------------|
+| `venta` | VES, 40, 92, 106, 121, 122, 129 | Stock de ventas tradicional |
+| `mktd` | 118 + todas las S1..S17 | Marketing + sucursales |
+| (omito) | todos | Sin filtro de tipo |
+
+```
+GET /api/v1/stock?tipo=mktd&limit=10
+GET /api/v1/stock?tipo=venta&almacen=VES
+GET /api/v1/almacenes?tipo=mktd
+```
+
+#### Filtro por fuente (`fuente`)
+
+| Valor | Que consulta | Almacenes disponibles |
+|-------|--------------|----------------------|
+| `general` (default) | Cache principal | VES, 40, 92, 106, 121, 122, 129, 118 |
+| `sucursales` | Cache de sucursales | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 |
+| `todas` | Ambas fuentes combinadas | Todos los almacenes |
+
+```
+GET /api/v1/stock?fuente=sucursales&almacen=S5
+GET /api/v1/stock?fuente=todas&almacen=118
+```
+
+#### Filtro por linea (`linea`) — tolerancia
+
+Acepta el ID corto O el nombre completo. El filtro es case-insensitive y hace match parcial.
+
+| Envias | Busca en | Match |
+|--------|----------|-------|
+| `01` | linea `"01 - PELOTAS"` | ✓ |
+| `PELOTAS` | linea `"01 - PELOTAS"` | ✓ |
+| `0101` | se normaliza a `01` | ✓ |
+| `AD` | linea `"AD - ACCESORIOS"` | ✓ |
+| `78` | linea `"78 - ARCHIVO"` | ✓ |
+
+```
+GET /api/v1/stock?linea=PELOTAS
+GET /api/v1/stock?linea=01&tipo=venta
+GET /api/v1/stock?linea=ARCHIVO&fuente=sucursales
+```
+
+#### Filtro por categoria (`categoria`)
+
+Mapeo de categorias a lineas (las lineas que no encajan van a `OTROS`):
+
+| Categoria | Lineas |
+|-----------|--------|
+| `VINIBALL` | 01, MA, 14, AD |
+| `VINIFAN` | 02, 09, 11, 72, 73, 75, 76, 77, 78, 79, CE, CF |
+| `INDUMENTARIA` | 57, 52 |
+| `REPRESENTADAS` | 85 |
+| `PUBLICIDAD` | 80, 81 |
+| `INDUSTRIAL` | 20, 21, 23 (automatico) |
+| `CIPTECH` | 30, 31, 33, 35 (automatico) |
+| `MATERIALES` | 40, 50 (automatico) |
+| `DESCARTE Y VARIOS` | 60, 65, 98 (automatico) |
+| `PRODUCCION` | 70 (automatico) |
+| `OTROS` | todo lo demas |
+
+```
+GET /api/v1/stock?categoria=VINIBALL&tipo=venta
+GET /api/v1/stock?categoria=INDUSTRIAL&limit=100
+```
+
+#### Búsqueda libre (`search`)
+
+Busca en SKU y descripcion simultaneamente. No distingue mayusculas.
+
+```
+GET /api/v1/stock?search=crackcito
+GET /api/v1/stock?search=011019
+GET /api/v1/stock?search=futbol
+```
+
+#### Combinacion de filtros
+
+Todos los filtros son logicamente AND entre si. Puedes combinarlos libremente:
+
+```
+# SKUs de venta en VES que sean de pelota
+GET /api/v1/stock?almacen=VES&linea=PELOTAS
+
+# Sucursales con stock de publicidad
+GET /api/v1/stock?fuente=sucursales&categoria=PUBLICIDAD
+
+# Todo marketing con paginacion
+GET /api/v1/stock?tipo=mktd&limit=50&offset=50
+
+# Busqueda con desglose por almacen
+GET /api/v1/stock/011019?fuente=todas
+```
+
+#### Orden de resultados
+
+Los items se ordenan por SKU. Dentro de cada SKU, los almacenes se ordenan asi:
+1. `VES` (almacen principal) siempre primero
+2. Resto de almacenes en orden alfabetico
+
+#### Ejemplo: flujo tipico de uso
+
+```
+# 1. Ver que almacenes tengo disponibles
+GET /api/v1/almacenes
+
+# 2. Ver resumen general
+GET /api/v1/resumen
+
+# 3. Listar productos de una categoria en venta
+GET /api/v1/stock?categoria=VINIFAN&tipo=venta&limit=20
+
+# 4. Buscar un SKU especifico y ver todas sus ubicaciones
+GET /api/v1/stock/011019?fuente=todas
+
+# 5. Ver solo mktd de una linea
+GET /api/v1/stock?linea=ARCHIVO&tipo=mktd
+```
 
 ### Formato de respuesta
 
@@ -100,15 +221,7 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 }
 ```
 
-### Tolerancia de entrada
-
-| Input | Resuelve | Ejemplo |
-|-------|----------|---------|
-| Linea `78` | `78 - ARCHIVO` | match por ID normalizado |
-| Linea `01` | `01 - PELOTAS` | idem |
-| Linea `AD` | `AD - ACCESORIOS DEPORTIVOS` | idem |
-| Linea `PELOTAS` | `01 - PELOTAS` | busqueda por texto libre |
-| SKU parcial | match en SKU y descripcion | via `?search=` |
+> **Nota sobre enriquecimiento.** Todos los endpoints retornan los campos extendidos (`precio`, `ean13`, `keywords`, etc.) de forma automatica. Si el catalogo maestro no esta cargado, estos campos llegan con valores por defecto (`0`, `""`, `false`) y `metadata.enriquecido` sera `false`.
 
 ## Tipos de almacen
 

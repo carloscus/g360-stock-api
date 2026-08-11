@@ -14,8 +14,8 @@ router = APIRouter(tags=["catalog"])
     response_model=CatalogUploadResponse,
     summary="Subir catalogo de productos",
     description="Sube un archivo JSON generado por g360-master-data. "
-                "El catalogo se carga en memoria y se usa para enriquecer "
-                "las respuestas de /api/v1/stock?enrich=true.",
+                 "El catalogo se carga en memoria y se usa para enriquecer automaticamente "
+                 "todas las respuestas de /api/v1/stock.",
 )
 async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_productos.json")) -> UploadResponse:
     nombre = (archivo.filename or "archivo").lower()

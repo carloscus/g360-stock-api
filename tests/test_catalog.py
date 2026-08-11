@@ -87,7 +87,7 @@ class TestCatalogUpload:
 
     @pytest.mark.skipif(not RUTA_CATALOGO.exists(), reason="No hay archivo de catalogo")
     def test_stock_con_enrich(self):
-        """Verificar que /stock?enrich=true retorna campos del catalogo."""
+        """Verificar que /stock retorna campos del catalogo cuando esta cargado."""
         # Cargar catalogo
         with open(RUTA_CATALOGO, encoding="utf-8") as f:
             data = json.load(f)
@@ -120,7 +120,7 @@ class TestCatalogUpload:
 
     @pytest.mark.skipif(not RUTA_CATALOGO.exists(), reason="No hay archivo de catalogo")
     def test_sku_con_enrich(self):
-        """Verificar que /stock/{sku}?enrich=true retorna campos del catalogo."""
+        """Verificar que /stock/{sku} retorna campos del catalogo cuando esta cargado."""
         import json as _json
         with open(RUTA_CATALOGO, encoding="utf-8") as f:
             data = _json.load(f)

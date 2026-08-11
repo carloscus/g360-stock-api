@@ -16,7 +16,8 @@ router = APIRouter(tags=["stock"])
     summary="Listar stock de todos los productos",
     description="Obtiene el stock consolidado desde la fuente S1 (appweb.cipsa.com.pe). "
                 "Acepta filtros opcionales, paginacion y categorizacion. "
-                "Siempre devuelve datos enriquecidos con catalogo maestro (orden, un_bx, precio, ean, etc.).",
+                "Los campos enriquecidos (precio, ean, keywords, etc.) se completan cuando "
+                "el catalogo maestro esta cargado; de lo contrario se retornan con valores por defecto.",
 )
 def listar_stock(
     almacen: Optional[str] = Query(None, description="Filtrar por codigo de almacen (ej: VES, 40, 118)"),
@@ -41,7 +42,8 @@ def listar_stock(
     response_model=ItemStockEnriched,
     summary="Obtener detalle de un SKU",
     description="Busca un producto por su codigo SKU y devuelve su detalle "
-    "con desglose por almacen y datos enriquecidos del catalogo maestro.",
+    "con desglose por almacen. Los campos enriquecidos se completan cuando "
+    "el catalogo maestro esta cargado.",
 )
 def obtener_sku(
     sku: str,

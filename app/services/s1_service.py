@@ -334,6 +334,11 @@ class ServicioStock:
 
     @staticmethod
     def _es_momento_valido() -> bool:
+        """Verifica si es horario laboral en Lima para descargar datos.
+
+        Horario: Lunes a Sabado, 7:00 a 22:59 hora de Lima (-05:00).
+        Domingos y fuera de horario se sirve cache vencido en vez de descargar.
+        """
         ahora = datetime.now(LIMA_TZ)
         if ahora.weekday() == 6:  # domingo
             return False
@@ -347,6 +352,16 @@ class ServicioStock:
         return self._items_general
 
     def _refrescar_si_es_necesario(self, fuente: str) -> None:
+        """Decide si descargar datos frescos o servir el cache.
+
+        Reglas:
+        1. Sin cache → descarga forzada (sin importar dia/hora).
+           Nunca responder mudo: es preferible datos viejos que nada.
+        2. Cache vigente (< TTL) → sirve directo.
+        3. Cache vencido + horario laboral (L-S 7:00-22:59 Lima) → descarga fresh.
+        4. Cache vencido + fuera de horario / domingo → sirve cache vencido.
+           El campo metadata.cache_expirado=True avisa al consumidor.
+        """
         ahora = datetime.now(timezone.utc)
         chequear = []
         if fuente in ("general", "todas"):
@@ -362,6 +377,8 @@ class ServicioStock:
                 hay_cache = bool(self._items_sucursales)
 
             if not hay_cache:
+                # Sin datos: descarga forzada sin importar horario.
+                # Es preferible un error que responder vacio.
                 self._actualizar_desde_origen(f)
                 continue
 

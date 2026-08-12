@@ -34,6 +34,15 @@ from app.services.catalog_service import catalog_service
 LIMA_TZ = timezone(timedelta(hours=-5))
 
 
+def _a_lima(dt: Optional[datetime]) -> Optional[datetime]:
+    """Convierte un datetime UTC a zona Lima (-05:00) para展示 al usuario."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(LIMA_TZ)
+
+
 def _extraer_linea_id(linea: str) -> Optional[str]:
     """Extrae el identificador corto de la linea a partir del codigo.
     Soporta: '0101' -> '01', '0101 - PELOTAS' -> '01',
@@ -250,7 +259,7 @@ class ServicioStock:
         valido = bool(self._fecha_general and ahora - self._fecha_general <= timedelta(seconds=settings.cache_ttl_segundos))
         return HealthResponse(
             status="ok",
-            timestamp=ahora,
+            timestamp=_a_lima(ahora),
             cache_skus=len(self._items_general),
             cache_valido=valido,
         )
@@ -559,7 +568,7 @@ class ServicioStock:
         return StockEnrichedResponse(
             metadata=MetadataStock(
                 fuente=fuente_label,
-                fecha_descarga=ref_fecha,
+                fecha_descarga=_a_lima(ref_fecha),
                 total_skus=total,
                 total_almacenes=len(self._obtener_codigos_almacen(
                     self._datos_sucursales if fuente == "sucursales" else self._datos_general

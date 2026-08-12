@@ -259,11 +259,13 @@ Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
 
 ### Reglas de refresco
 
-1. **Sin cache** → descarga forzada (sin importar dia/hora)
-2. **Cache vigente** → sirve del cache
-3. **Cache vencido + horario valido** (L–S 7:00–22:59) → descarga fresh
-4. **Cache vencido + horario invalido** → sirve cache vencido
-5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min
+1. **Sin cache** → descarga forzada (sin importar dia/hora).
+   Nunca responde vacio: es preferible un error que data incorrecta o ninguna.
+2. **Cache vigente** (< TTL) → sirve del cache.
+3. **Cache vencido + horario valido** (L-S 7:00–22:59 Lima) → descarga fresh.
+4. **Cache vencido + horario invalido** (noche o domingo) → sirve cache vencido.
+   El campo `metadata.cache_expirado=true` avisa al consumidor.
+5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min.
 
 ## Lineas de producto
 

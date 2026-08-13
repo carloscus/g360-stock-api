@@ -146,6 +146,9 @@ class ServicioStock:
         limit: Optional[int] = None,
         offset: int = 0,
     ) -> StockEnrichedResponse:
+        # Si se filtra por almacen y no se especifica fuente, usar todas para detectar S*
+        if almacen and fuente == "general":
+            fuente = "todas"
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_items_segun_fuente(fuente)
         items_enriched = self._enriquecer_items(items)

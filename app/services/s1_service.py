@@ -155,6 +155,13 @@ class ServicioStock:
         return self._construir_respuesta(items_enriched, fuente, almacen, busqueda, linea, grupo, um, categoria, limit, offset, tipo=tipo)
 
     def obtener_sku_enriched(self, sku: str, fuente: str = "general") -> Optional[ItemStockEnriched]:
+        # Auto-detect: si la fuente es general pero el SKU existe en sucursales, usar todas
+        if fuente == "general":
+            self._refrescar_si_es_necesario("sucursales")
+            items_s = self._obtener_items_segun_fuente("sucursales")
+            sku_en_sucursales = any(i.sku == sku for i in items_s)
+            if sku_en_sucursales:
+                fuente = "todas"
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_items_segun_fuente(fuente)
         items_enriched = self._enriquecer_items(items)

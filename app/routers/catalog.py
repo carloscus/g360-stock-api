@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 import json
-from fastapi import APIRouter, HTTPException, UploadFile, File
 
-from app.models.schemas import CatalogHealthResponse, CatalogUploadResponse
+from fastapi import APIRouter, File, HTTPException, UploadFile
+
+from app.models.schemas import (
+    CatalogHealthResponse,
+    CatalogoEntry,
+    CatalogoResponse,
+    CatalogUploadResponse,
+)
 from app.services.catalog_service import catalog_service
 
 router = APIRouter(tags=["catalog"])
@@ -17,7 +23,7 @@ router = APIRouter(tags=["catalog"])
                  "El catalogo se carga en memoria y se usa para enriquecer automaticamente "
                  "todas las respuestas de /api/v1/stock.",
 )
-async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_productos.json")) -> UploadResponse:
+async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_productos.json")) -> CatalogUploadResponse:
     nombre = (archivo.filename or "archivo").lower()
     if not nombre.endswith(".json"):
         raise HTTPException(status_code=400, detail="Formato no soportado. Solo se aceptan archivos .json")
@@ -34,6 +40,28 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
         total_skus=result["total_skus"],
         con_ean14=result["con_ean14"],
         con_unbx=result["con_unbx"],
+    )
+
+
+@router.get(
+    "/api/v1/catalog",
+    response_model=CatalogoResponse,
+    summary="Lista del catalogo maestro",
+    description="Devuelve el catalogo de productos completo (solo campos de catalogo, sin stock ni almacenes).",
+)
+def listar_catalogo() -> CatalogoResponse:
+    items = catalog_service.listar()
+    entries = [
+        CatalogoEntry(**{k: p[k] for k in p if k in CatalogoEntry.model_fields and p[k] is not None})
+        for p in items
+    ]
+    return CatalogoResponse(
+        metadata={
+            "cargado": catalog_service.cargado,
+            "total_skus": len(items),
+            "generated_at": catalog_service.fecha_carga,
+        },
+        items=entries,
     )
 
 

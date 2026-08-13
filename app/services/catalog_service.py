@@ -78,6 +78,18 @@ class CatalogService:
         """Busca un SKU en el catálogo."""
         return self._catalog.get(sku.strip().upper())
 
+    @property
+    def fecha_carga(self) -> datetime | None:
+        """Momento en que se cargó el catálogo."""
+        return self._fecha_carga
+
+    def listar(self) -> list[dict]:
+        """Devuelve el catálogo completo ordenado por 'orden' del maestro y luego por SKU."""
+        with self._lock:
+            items = list(self._catalog.values())
+        items.sort(key=lambda p: (p.get("orden") is None, p.get("orden") or 9999, p.get("sku") or ""))
+        return items
+
     def cargar_desde_url(self, url: str) -> dict:
         """Descarga el catalogo desde una URL remota y lo carga en memoria."""
         import httpx

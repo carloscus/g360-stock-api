@@ -95,3 +95,33 @@ class CatalogHealthResponse(BaseModel):
     edad_segundos: int = Field(0, description="Tiempo desde la ultima carga")
     stale: bool = Field(False, description="Si el catalogo ha excedido el TTL")
     ttl_segundos: int = Field(21600, description="TTL del catalogo en segundos")
+
+
+class CatalogoEntry(BaseModel):
+    sku: str = Field(..., description="Codigo unico del producto")
+    nombre: str = Field(default="", description="Nombre o descripcion del producto")
+    nombre_corto: str = Field(default="", description="Nombre corto generado")
+    linea: str = Field(default="", description="Linea de producto")
+    grupo: str = Field(default="", description="Grupo de producto")
+    tipo: str = Field(default="", description="Tipo de producto")
+    familia: str = Field(default="", description="Familia de producto")
+    categoria: str = Field(default="", description="Categoria de negocio")
+    estado_linea: str = Field(default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO)")
+    un_bx: int = Field(1, description="Unidades por caja")
+    peso_kg: float = Field(0.0, description="Peso en kg")
+    precio: float = Field(0.0, description="Precio de lista")
+    ean13: str = Field(default="", description="Codigo de barras EAN-13")
+    ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
+    keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
+    orden: int = Field(0, description="Orden indice maestro del catalogo")
+
+
+class CatalogoMetadata(BaseModel):
+    cargado: bool = Field(False, description="Si el catalogo esta cargado en memoria")
+    total_skus: int = Field(0, description="Total de SKUs en el catalogo")
+    generated_at: Optional[datetime] = Field(None, description="Momento de la ultima carga del catalogo")
+
+
+class CatalogoResponse(BaseModel):
+    metadata: CatalogoMetadata
+    items: list[CatalogoEntry] = Field(default_factory=list, description="Catalogo maestro completo sin stock")

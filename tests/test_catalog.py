@@ -50,6 +50,46 @@ class TestCatalogHealth:
         catalog_service._fecha_carga = None
 
 
+class TestCatalogList:
+    def test_listar_sin_catalogo(self):
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+        respuesta = client.get("/api/v1/catalog")
+        assert respuesta.status_code == 200
+        datos = respuesta.json()
+        assert datos["metadata"]["cargado"] is False
+        assert datos["metadata"]["total_skus"] == 0
+        assert datos["items"] == []
+
+    @pytest.mark.skipif(not RUTA_CATALOGO.exists(), reason="No hay archivo de catalogo")
+    def test_listar_catalogo(self):
+        with open(RUTA_CATALOGO, encoding="utf-8") as f:
+            data = json.load(f)
+        catalog_service.cargar_desde_json(data)
+
+        respuesta = client.get("/api/v1/catalog")
+        assert respuesta.status_code == 200
+        datos = respuesta.json()
+        total = datos["metadata"]["total_skus"]
+        assert total == catalog_service.total_skus > 0
+        items = datos["items"]
+        assert len(items) == total
+
+        required = {"sku", "nombre", "linea", "grupo", "tipo", "familia", "categoria",
+                    "estado_linea", "un_bx", "peso_kg", "precio", "ean13", "ean14",
+                    "keywords", "orden"}
+        assert required.issubset(set(items[0].keys()))
+        assert all("almacenes" not in it for it in items)
+
+        # Ordenado por orden del maestro (ignorando los sin orden)
+        ordens = [it["orden"] for it in items if it["orden"] != 0]
+        assert ordens == sorted(ordens)
+
+        catalog_service._catalog = {}
+        catalog_service._fecha_carga = None
+
+
 class TestCatalogUpload:
     def test_upload_sin_archivo(self):
         respuesta = client.post("/api/v1/catalog/upload")

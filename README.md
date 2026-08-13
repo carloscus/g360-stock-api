@@ -45,6 +45,7 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 | `POST` | `/api/v1/upload/stock` | Subir archivo XLS manualmente |
 | `POST` | `/api/v1/upload/catalog` | Subir catalogo maestro JSON |
 | `GET` | `/api/v1/catalog/health` | Estado del catalogo cargado |
+| `GET` | `/api/v1/catalog` | Lista del catalogo maestro completo (solo campos de catalogo, sin stock) |
 
 ### Parametros de GET /api/v1/stock
 
@@ -318,7 +319,7 @@ g360-stock-api/
 │   │   ├── stock.py           # GET /api/v1/stock, /{sku}, /lineas, /almacenes, /categorias
 │   │   ├── upload.py          # POST /api/v1/upload (XLS manual)
 │   │   ├── resumen.py         # GET /api/v1/resumen
-│   │   └── catalog.py         # POST /api/v1/catalog/upload, GET /api/v1/catalog/health
+│   │   └── catalog.py         # POST /api/v1/catalog/upload, GET /api/v1/catalog, GET /api/v1/catalog/health
 │   ├── services/
 │   │   ├── s1_service.py      # Logica: descarga, parseo, cache dual, enriquecimiento, filtros
 │   │   └── catalog_service.py # Gestion del catalogo maestro en memoria con TTL

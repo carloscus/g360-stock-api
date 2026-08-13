@@ -348,8 +348,31 @@ class ServicioStock:
         if fuente == "sucursales":
             return self._items_sucursales
         if fuente == "todas":
-            return self._items_general + self._items_sucursales
+            return self._merge_items_por_sku(self._items_general, self._items_sucursales)
         return self._items_general
+
+    @staticmethod
+    def _merge_items_por_sku(
+        items_a: list[ItemStock], items_b: list[ItemStock],
+    ) -> list[ItemStock]:
+        """Mergea dos listas de items por SKU, combinando los almacenes de ambos."""
+        mapa: dict[str, ItemStock] = {}
+        for item in items_a:
+            mapa[item.sku] = item
+        for item in items_b:
+            if item.sku in mapa:
+                # Merge almacenes: los de B se agregan si no existen en A
+                existentes = {a.almacen for a in mapa[item.sku].almacenes}
+                for alm in item.almacenes:
+                    if alm.almacen not in existentes:
+                        mapa[item.sku].almacenes.append(alm)
+                # Ordenar: VES primero, resto alfabetico
+                mapa[item.sku].almacenes.sort(
+                    key=lambda a: (0 if a.almacen == ALMACEN_PRINCIPAL else 1, a.almacen)
+                )
+            else:
+                mapa[item.sku] = item
+        return sorted(mapa.values(), key=lambda x: x.sku)
 
     def _refrescar_si_es_necesario(self, fuente: str) -> None:
         """Decide si descargar datos frescos o servir el cache.

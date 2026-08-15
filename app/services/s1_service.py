@@ -130,6 +130,11 @@ class ServicioStock:
         self._fecha_sucursales: Optional[datetime] = None
         # Fuente combinada
         self._enriched_todas: list[ItemStockEnriched] = []
+        # Circuit breaker
+        self._cb_fallos_general: int = 0
+        self._cb_fallos_sucursales: int = 0
+        self._cb_abierto_general: Optional[datetime] = None
+        self._cb_abierto_sucursales: Optional[datetime] = None
 
         self._cargar_cache(settings.cache_ruta, "general")
         self._cargar_cache(settings.cache_ruta2, "sucursales")
@@ -405,6 +410,7 @@ class ServicioStock:
         3. Cache vencido + horario laboral (L-S 7:00-22:59 Lima) → descarga fresh.
         4. Cache vencido + fuera de horario / domingo → sirve cache vencido.
            El campo metadata.cache_expirado=True avisa al consumidor.
+        5. Circuit breaker abierto → sirve cache sin intentar descargar.
         """
         ahora = datetime.now(timezone.utc)
         chequear = []
@@ -416,15 +422,31 @@ class ServicioStock:
             if f == "general":
                 fecha = self._fecha_general
                 hay_cache = bool(self._items_general)
+                cb_abierto = self._cb_abierto_general
             else:
                 fecha = self._fecha_sucursales
                 hay_cache = bool(self._items_sucursales)
+                cb_abierto = self._cb_abierto_sucursales
 
             if not hay_cache:
                 # Sin datos: descarga forzada sin importar horario.
                 # Es preferible un error que responder vacio.
                 self._actualizar_desde_origen(f)
                 continue
+
+            # Circuit breaker: si esta abierto, no intentar descargar
+            if cb_abierto and ahora < cb_abierto:
+                logger.warning("Circuit breaker abierto para %s hasta %s", f, cb_abierto.isoformat())
+                continue
+            # Si el circuit breaker expiro, cerrarlo y permitir intento
+            if cb_abierto and ahora >= cb_abierto:
+                logger.info("Circuit breaker reseteado para %s", f)
+                if f == "general":
+                    self._cb_abierto_general = None
+                    self._cb_fallos_general = 0
+                else:
+                    self._cb_abierto_sucursales = None
+                    self._cb_fallos_sucursales = 0
 
             if not fecha:
                 edad = timedelta.max
@@ -458,16 +480,33 @@ class ServicioStock:
                     self._items_sucursales = items
                     self._enriched_sucursales = enriched
                     self._fecha_sucursales = ahora
+                    self._cb_fallos_sucursales = 0
+                    self._cb_abierto_sucursales = None
                 else:
                     self._datos_general = datos
                     self._items_general = items
                     self._enriched_general = enriched
                     self._fecha_general = ahora
+                    self._cb_fallos_general = 0
+                    self._cb_abierto_general = None
                 self._rebuild_todas()
                 self._guardar_cache(cache_ruta, fuente)
                 Path(ruta).unlink(missing_ok=True)
                 logger.info("Cache %s actualizado: %d SKUs", fuente, len(items))
             except Exception:
+                # Actualizar circuit breaker
+                if fuente == "sucursales":
+                    self._cb_fallos_sucursales += 1
+                    if self._cb_fallos_sucursales >= settings.circuit_breaker_max_fallos:
+                        self._cb_abierto_sucursales = datetime.now(timezone.utc) + timedelta(seconds=settings.circuit_breaker_reset_seg)
+                        logger.error("Circuit breaker ABIERTO para sucursales por %ds (fallos: %d)",
+                                     settings.circuit_breaker_reset_seg, self._cb_fallos_sucursales)
+                else:
+                    self._cb_fallos_general += 1
+                    if self._cb_fallos_general >= settings.circuit_breaker_max_fallos:
+                        self._cb_abierto_general = datetime.now(timezone.utc) + timedelta(seconds=settings.circuit_breaker_reset_seg)
+                        logger.error("Circuit breaker ABIERTO para general por %ds (fallos: %d)",
+                                     settings.circuit_breaker_reset_seg, self._cb_fallos_general)
                 logger.exception("Error actualizando cache %s", fuente)
                 if not hay_items:
                     raise RuntimeError(
@@ -484,6 +523,12 @@ class ServicioStock:
                     follow_redirects=True,
                 )
                 respuesta.raise_for_status()
+                # Limitar tamano de descarga
+                content_length = len(respuesta.content)
+                if content_length > settings.xls_max_bytes:
+                    raise RuntimeError(
+                        f"XLS demasiado grande: {content_length} bytes (max: {settings.xls_max_bytes})"
+                    )
                 break
             except (httpx.TimeoutException, httpx.NetworkError) as e:
                 if intento == 1:

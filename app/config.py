@@ -24,6 +24,18 @@ class Settings(BaseSettings):
     catalogo_raw_url: str = (
         "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"
     )
+    # CORS - origenes permitidos (separados por coma, "*" para todos)
+    cors_origins: str = "*"
+    # Rate limiting
+    rate_limit: str = "60/minute"
+    # Request timeout en segundos
+    request_timeout: int = 30
+    # Maximo tamano de XLS descargado en bytes (5MB)
+    xls_max_bytes: int = 5_242_880
+    # Circuit breaker: maximos fallos consecutivos antes de abrir circuito
+    circuit_breaker_max_fallos: int = 3
+    # Circuit breaker: segundos para intentar de nuevo despues de abrir
+    circuit_breaker_reset_seg: int = 300
 
     model_config = {"env_file": ".env", "env_prefix": "S1_"}
 

@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
             )
             if resultado.get("ok"):
                 print(f"[catalog] auto-cargado desde raw: {resultado.get('total_skus')} SKUs")
+                # Re-enriquecer stock items con el catalogo recien cargado
+                from app.services.s1_service import servicio_stock
+                servicio_stock.re_enriquecer()
             else:
                 print(f"[catalog] auto-carga fallo: {resultado.get('error')}")
         except (OSError, RuntimeError) as e:

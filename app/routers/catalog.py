@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import json
+import logging
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from app.models.schemas import (
     CatalogHealthResponse,
     CatalogoEntry,
+    CatalogoMetadata,
     CatalogoResponse,
     CatalogUploadResponse,
 )
 from app.services.catalog_service import catalog_service
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["catalog"])
 
@@ -35,6 +39,15 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
         raise HTTPException(status_code=422, detail=f"JSON invalido: {e}")
 
     result = catalog_service.cargar_desde_json(data)
+
+    # Re-enriquecer los items de stock con el catalogo actualizado
+    try:
+        from app.services.s1_service import servicio_stock
+        servicio_stock.re_enriquecer()
+        logger.info("Re-enriquecimiento completado tras upload de catalogo")
+    except Exception:
+        logger.exception("Error en re-enriquecimiento tras upload de catalogo")
+
     return CatalogUploadResponse(
         mensaje="Catalogo cargado correctamente",
         total_skus=result["total_skus"],
@@ -50,17 +63,21 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
     description="Devuelve el catalogo de productos completo (solo campos de catalogo, sin stock ni almacenes).",
 )
 def listar_catalogo() -> CatalogoResponse:
-    items = catalog_service.listar()
+    catalog = catalog_service._catalog
+    items = sorted(
+        catalog.values(),
+        key=lambda p: (p.get("orden") is None, p.get("orden") or 9999, p.get("sku") or ""),
+    )
     entries = [
         CatalogoEntry(**{k: p[k] for k in p if k in CatalogoEntry.model_fields and p[k] is not None})
         for p in items
     ]
     return CatalogoResponse(
-        metadata={
-            "cargado": catalog_service.cargado,
-            "total_skus": len(items),
-            "generated_at": catalog_service.fecha_carga,
-        },
+        metadata=CatalogoMetadata(
+            cargado=catalog_service.cargado,
+            total_skus=len(items),
+            generated_at=catalog_service._fecha_carga,
+        ),
         items=entries,
     )
 

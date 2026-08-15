@@ -7,7 +7,7 @@
 
 > API REST para el reporte de stock **S1** desde **appweb.cipsa.com.pe**. Descarga los archivos XLS del ERP (general + sucursales), los parsea y los sirve como JSON estructurado por SKU y almacen, enriquecido con datos del catalogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 
 ## ¿Cómo está organizado el proyecto?
@@ -24,9 +24,9 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 ```
 
 - **Sin base de datos.** Cache en disco con backup rotativo (`.bak`) y TTL configurable.
-- **Dos fuentes de stock.** General (VES, 40, 118...) y Sucursales (S1, S2, S3...).
-- **Catalogo maestro.** Cargado desde `g360-master-data` (JSON) para enriquecimiento. Auto-descarga desde GitHub en Render free.
-- **Horario laboral L–S 7:00–22:59.** Fuera de ese rango y domingos no se descarga, se sirve cache vencido.
+- **Dos fuentes de stock.** General (VES, 40, 118...) y Sucursales (S1, S2, S3...). Se mergean automaticamente por SKU cuando se usa `fuente=todas` o se filtra por almacen.
+- **Catalogo maestro.** Cargado desde `g360-master-data` (JSON) para enriquecimiento. Auto-descarga desde GitHub en Render free. El enriquecimiento se realiza al cachear, no por request.
+- **Horario laboral L–S 7:00–22:59 (Lima, -05:00).** Fuera de ese rango y domingos no se descarga, se sirve cache vencido.
 - **Stale cache.** Si appweb falla, se sirve cache vencido sin reintentar hasta el proximo TTL.
 - **Retry.** Reintenta 1 vez ante timeout de red.
 - **Thread-safe.** Lock de descarga para evitar duplicados en concurrencia.
@@ -51,7 +51,7 @@ appweb.cipsa.com.pe ──XLS──▶ g360-stock-api ──▶ data/stock_cache
 
 | Parametro | Tipo | Ejemplo | Descripcion |
 |-----------|------|---------|-------------|
-| `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen |
+| `almacen` | string | `VES`, `40`, `118` | Filtrar por codigo de almacen (auto-detecta `fuente=todas` si es S*) |
 | `search` | string | `CRACKCITO` | Buscar por SKU o descripcion (texto libre) |
 | `linea` | string | `01`, `PELOTAS`, `78`, `AD` | Filtrar por linea (tolerante: ID o nombre) |
 | `grupo` | string | `NACIONAL`, `FOLDER` | Filtrar por grupo de producto |
@@ -90,9 +90,13 @@ GET /api/v1/almacenes?tipo=mktd
 | `sucursales` | Cache de sucursales | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 |
 | `todas` | Ambas fuentes combinadas | Todos los almacenes |
 
+> **Auto-deteccion.** Si se filtra por `almacen` sin especificar `fuente`, el API usa `todas` automaticamente para incluir S*. Lo mismo aplica para `/stock/{sku}`: si el SKU existe en sucursales, se mergean los almacenes.
+
 ```
 GET /api/v1/stock?fuente=sucursales&almacen=S5
 GET /api/v1/stock?fuente=todas&almacen=118
+GET /api/v1/stock?almacen=S5          # auto-detecta fuente=todas
+GET /api/v1/stock/77145               # auto-detecta si existe en sucursales
 ```
 
 #### Filtro por linea (`linea`) — tolerancia
@@ -222,7 +226,7 @@ GET /api/v1/stock?linea=ARCHIVO&tipo=mktd
 }
 ```
 
-> **Nota sobre enriquecimiento.** Todos los endpoints retornan los campos extendidos (`precio`, `ean13`, `keywords`, etc.) de forma automatica. Si el catalogo maestro no esta cargado, estos campos llegan con valores por defecto (`0`, `""`, `false`) y `metadata.enriquecido` sera `false`.
+> **Nota sobre enriquecimiento.** Todos los endpoints retornan los campos extendidos (`precio`, `ean13`, `keywords`, etc.) de forma automatica. El enriquecimiento se realiza al cachear los datos (no por request), lo que garantiza consistencia y performance. Si el catalogo maestro no esta cargado, estos campos llegan con valores por defecto (`0`, `""`, `false`) y `metadata.enriquecido` sera `false`. Al subir un catalogo nuevo via `/api/v1/catalog/upload`, los items se re-enriquecen automaticamente.
 
 ## Tipos de almacen
 
@@ -239,7 +243,9 @@ El tipo se refleja en cada item del array `almacenes[].tipo`. El endpoint `/alma
 |--------|-----------|-----------|-------|
 | `general` | `parametroX2=""` | VES, 40, 92, 106, 121, 122, 129, 118 | `data/stock_cache.json` |
 | `sucursales` | `parametroX2="1"` | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 | `data/stock_cache_sucursales.json` |
-| `todas` | ambas | ambos | ambas |
+| `todas` | ambas | ambos, mergeados por SKU sin duplicados | ambas |
+
+Las dos fuentes se descargan y cachean de forma independiente. Al consultar con `fuente=todas`, los items se mergean por SKU combinando sus almacenes, garantizando cero duplicados.
 
 ## Catalogo maestro
 
@@ -256,7 +262,7 @@ Archivos de cache en `data/`:
 - `stock_cache_sucursales.json` — fuente sucursales
 - `catalog_cache.json` — catalogo maestro
 
-Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
+Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe. Los items se enriquecen con el catalogo al momento de cachear, no en cada request.
 
 ### Reglas de refresco
 

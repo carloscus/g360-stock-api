@@ -7,7 +7,7 @@
 
 > API REST para el reporte de stock **S1** desde **appweb.cipsa.com.pe**. Descarga los archivos XLS del ERP (general + sucursales), los parsea y los sirve como JSON estructurado por SKU y almacen, enriquecido con datos del catalogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 
 ## ¿Cómo está organizado el proyecto?
@@ -274,6 +274,43 @@ Cada uno con backup rotativo (`.bak`) que se activa si el principal se corrompe.
    El campo `metadata.cache_expirado=true` avisa al consumidor.
 5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min.
 
+## Protecciones
+
+La API incluye multiples capas de proteccion para resistir alto trafico y fallos externos:
+
+| Capa | Que hace | Que previene |
+|------|----------|--------------|
+| **Rate limiting** | 60 req/min por IP (configurable) | Saturacion, abuso, DDoS basico |
+| **Request timeout** | 30s max por request, devuelve 504 | Requests colgados, memory leaks |
+| **Circuit breaker** | 3 fallos consecutivos → circuito abierto 5 min | Reintentos inutiles contra appweb caido |
+| **Cache stale** | Sirve datos viejos si appweb falla | Respuestas vacias, errores al usuario |
+| **XLS size limit** | 5MB max por descarga | Archivos gigantes que agoten memoria |
+| **Thread-safe lock** | 1 sola descarga por fuente a la vez | Descargas duplicadas en concurrencia |
+| **CORS** | Configurable, default `*` | Acceso no autorizado desde otros dominios |
+| **API Key** | Header `X-API-Key` requerido si esta configurado | Acceso no autenticado |
+| **GZip** | Compresion automatica >500 bytes | Ancho de banda excesivo |
+| **Request logging** | method, path, status, elapsed, IP | Sin trazabilidad, imposible diagnosticar |
+
+### Circuit breaker en detalle
+
+```
+Request → Cache vencido + horario valido
+  → Intenta descargar de appweb
+  → Falla (timeout, 500, red)
+  → _cb_fallos += 1
+
+3 fallos consecutivos:
+  → Circuito ABIERTO por 5 minutos
+  → No intenta descargar, sirve cache vencido
+  → Log: "Circuit breaker ABIERTO para general por 300s"
+
+Despues de 5 min:
+  → Circuito se CIERRA
+  → Siguiente request intenta descargar de nuevo
+  → Si exito → _cb_fallos = 0
+  → Si falla → reabre circuito
+```
+
 ## Lineas de producto
 
 **34 lineas** distribuidas en 10 categorias de negocio. Top lineas por volumen:
@@ -347,9 +384,10 @@ g360-stock-api/
 
 Variables de entorno (prefix `S1_`):
 
+### Fuentes de datos
+
 | Variable | Default | Descripcion |
 |----------|---------|-------------|
-| `S1_API_KEY` | `""` | API Key para proteger endpoints. Vacío = sin auth |
 | `S1_SOURCE1_URL` | URL appweb | Fuente general (parametroX2="") |
 | `S1_SOURCE2_URL` | URL appweb | Fuente sucursales (parametroX2="1") |
 | `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache de stock (15 min) |
@@ -359,6 +397,18 @@ Variables de entorno (prefix `S1_`):
 | `S1_CATALOGO_TTL_SEGUNDOS` | `21600` | TTL del catalogo (6 horas) |
 | `S1_CATALOGO_RAW_URL` | URL GitHub | Fuente remota del catalogo para auto-carga |
 | `S1_PUERTO` | `8000` | Puerto del servidor |
+
+### Seguridad y proteccion
+
+| Variable | Default | Descripcion |
+|----------|---------|-------------|
+| `S1_API_KEY` | `""` | API Key. Vacío = sin auth. **Setear en Render, no en YAML** |
+| `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP (slowapi) |
+| `S1_REQUEST_TIMEOUT` | `30` | Timeout por request en segundos (504 si excede) |
+| `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos (separados por coma) |
+| `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos consecutivos antes de abrir circuito |
+| `S1_CIRCUIT_BREAKER_RESET_SEG` | `300` | Segundos para resetear circuito abierto (5 min) |
+| `S1_XLS_MAX_BYTES` | `5242880` | Máximo tamaño de XLS descargado (5 MB) |
 
 ### Autenticacion (opcional)
 

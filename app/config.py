@@ -13,6 +13,9 @@ class Settings(BaseSettings):
         '?value={"linea":"","porLinea":"tbLinea","grupo":"","porGrupo":"tbGrupo","tipo":"","porTipo":"tbTipo","familia":"","porFamilia":"tbFamilia","parametroX2":"1","parametroX1":"0"}'
     )
     api_key: str = ""
+    # Clave de lectura para clientes estaticos. Puede ser publica, pero no
+    # debe reutilizar la clave administrativa de upload/catalogo.
+    read_api_key: str = ""
     cache_ttl_segundos: int = 900
     cache_ruta: str = "data/stock_cache.json"
     cache_ruta2: str = "data/stock_cache_sucursales.json"
@@ -24,8 +27,8 @@ class Settings(BaseSettings):
     catalogo_raw_url: str = (
         "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"
     )
-    # CORS - origenes permitidos (separados por coma, "*" para todos)
-    cors_origins: str = "*"
+    # CORS - frontend publicado + desarrollo local
+    cors_origins: str = "https://carloscus.github.io,http://localhost:3000,http://localhost:5173"
     # Rate limiting
     rate_limit: str = "60/minute"
     # Request timeout en segundos

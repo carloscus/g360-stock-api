@@ -40,6 +40,13 @@ def verificar_api_key(api_key: str = Depends(api_key_header)) -> None:
         raise HTTPException(status_code=403, detail="API Key invalida")
 
 
+def verificar_read_api_key(api_key: str = Depends(api_key_header)) -> None:
+    """Allow the scoped read key or the legacy/admin key for compatibility."""
+    allowed = {key for key in (settings.read_api_key, settings.api_key) if key}
+    if allowed and api_key not in allowed:
+        raise HTTPException(status_code=403, detail="API Key invalida")
+
+
 # ── Lifespan ────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -111,7 +118,7 @@ origins = [o.strip() for o in settings.cors_origins.split(",")]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
@@ -125,8 +132,11 @@ async def root():
 
 
 # ── Routers ─────────────────────────────────────────────────────────
-app.include_router(health.router, dependencies=[Depends(verificar_api_key)])
-app.include_router(stock.router, dependencies=[Depends(verificar_api_key)])
+# Lectura protegida con una clave de alcance reducido para GitHub Pages.
+# Se acepta tambien la clave administrativa durante la transicion para no
+# romper clientes existentes que ya consumen GET con X-API-Key.
+app.include_router(health.router, dependencies=[Depends(verificar_read_api_key)])
+app.include_router(stock.router, dependencies=[Depends(verificar_read_api_key)])
 app.include_router(upload.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(resumen.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(catalog.router, dependencies=[Depends(verificar_api_key)])

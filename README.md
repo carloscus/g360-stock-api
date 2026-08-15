@@ -286,8 +286,8 @@ La API incluye multiples capas de proteccion para resistir alto trafico y fallos
 | **Cache stale** | Sirve datos viejos si appweb falla | Respuestas vacias, errores al usuario |
 | **XLS size limit** | 5MB max por descarga | Archivos gigantes que agoten memoria |
 | **Thread-safe lock** | 1 sola descarga por fuente a la vez | Descargas duplicadas en concurrencia |
-| **CORS** | Configurable, default `*` | Acceso no autorizado desde otros dominios |
-| **API Key** | Header `X-API-Key` requerido si esta configurado | Acceso no autenticado |
+| **CORS** | GitHub Pages + localhost por defecto, configurable | Acceso desde origenes no autorizados |
+| **API Key** | Header `X-API-Key` con clave de lectura o administrativa | Acceso no autorizado |
 | **GZip** | Compresion automatica >500 bytes | Ancho de banda excesivo |
 | **Request logging** | method, path, status, elapsed, IP | Sin trazabilidad, imposible diagnosticar |
 
@@ -402,23 +402,32 @@ Variables de entorno (prefix `S1_`):
 
 | Variable | Default | Descripcion |
 |----------|---------|-------------|
-| `S1_API_KEY` | `""` | API Key. Vacío = sin auth. **Setear en Render, no en YAML** |
+| `S1_API_KEY` | `""` | API Key administrativa. **Setear en Render, no en YAML** |
+| `S1_READ_API_KEY` | `""` | API Key de lectura para frontend estatico. **Separarla de la administrativa** |
 | `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP (slowapi) |
 | `S1_REQUEST_TIMEOUT` | `30` | Timeout por request en segundos (504 si excede) |
-| `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos (separados por coma) |
+| `S1_CORS_ORIGINS` | GitHub Pages + localhost | Orígenes CORS permitidos (separados por coma) |
 | `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos consecutivos antes de abrir circuito |
 | `S1_CIRCUIT_BREAKER_RESET_SEG` | `300` | Segundos para resetear circuito abierto (5 min) |
 | `S1_XLS_MAX_BYTES` | `5242880` | Máximo tamaño de XLS descargado (5 MB) |
 
-### Autenticacion (opcional)
+### Autenticacion y frontend estatico
 
-Si se configura `S1_API_KEY`, todos los endpoints requieren el header:
+El frontend estatico de GitHub Pages no puede ocultar una API key. Por eso se usan dos alcances:
+
+- `GET /api/v1/stock` y `GET /api/v1/health` requieren `S1_READ_API_KEY`.
+- La clave de lectura puede quedar visible en el bundle, pero no concede permisos de escritura.
+- Rate limiting y CORS agregan controles operativos; no reemplazan la clave.
+- Upload de catalogo, catalogo maestro y resumen permanecen protegidos.
+- `S1_API_KEY` nunca se compila en el frontend.
+
+Los endpoints protegidos requieren el header:
 
 ```
 X-API-Key: tu-clave-secreta
 ```
 
-Sin el header o con clave incorrecta → `403 Forbidden`. Si `S1_API_KEY` esta vacio (default), la API es abierta.
+Sin el header o con clave incorrecta → `403 Forbidden`.
 
 ## Desarrollo
 

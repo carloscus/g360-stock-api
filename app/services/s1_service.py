@@ -311,6 +311,10 @@ class ServicioStock:
                 linea_id = item.sku[:2]
 
             if cat:
+                # Derivar estado_linea de grupo si el catálogo no lo tiene
+                cat_estado_linea = cat.get("estado_linea", "").strip()
+                if not cat_estado_linea:
+                    cat_estado_linea = cat.get("grupo", "").strip()
                 cat_linea = cat.get("linea", "").strip()
                 cat_grupo = cat.get("grupo", "").strip()
                 cat_tipo = cat.get("tipo", "").strip()
@@ -344,7 +348,7 @@ class ServicioStock:
                     nombre_corto=cat.get("nombre_corto", ""),
                     ean13=cat.get("ean13", ""),
                     ean14=cat.get("ean14", ""),
-                    estado_linea=cat.get("estado_linea", ""),
+                    estado_linea=cat_estado_linea,
                     keywords=cat.get("keywords", []),
                     orden=cat.get("orden", sku_index.get(item.sku, 0)),
                     linea_id=linea_id,

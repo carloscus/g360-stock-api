@@ -20,17 +20,18 @@ flowchart TD
     MASTER["g360-master-data<br/>catalogo_productos.json"]
 
     subgraph API["g360-stock-api"]
-        CACHE1["stock_cache.json<br/>(general: VES, 40, 92...)"]
-        CACHE2["stock_cache_sucursales.json<br/>(S1, S2, S3...)"]
-        CAT_CACHE["catalog_cache.json<br/>(2393 SKUs)"]
-        ENRICH["enriquecimiento<br/>(al cachear, no por request)"]
-        MERGE["_merge_items_por_sku<br/>(sin duplicados)"]
-    ]
+        CACHE1["stock_cache.json<br/>general: VES, 40, 92..."]
+        CACHE2["stock_cache_sucursales.json<br/>S1, S2, S3..."]
+        CAT_CACHE["catalog_cache.json<br/>2393 SKUs"]
+        ENRICH["enriquecimiento<br/>al cachear, no por request"]
+        MERGE["_merge_items_por_sku<br/>sin duplicados"]
+    end
 
-    ERP -->|parametroX2=""| CACHE1
-    ERP -->|parametroX2="1"| CACHE2
+    ERP --> CACHE1
+    ERP --> CACHE2
     MASTER -->|auto-download| CAT_CACHE
-    CACHE1 & CACHE2 --> ENRICH
+    CACHE1 --> ENRICH
+    CACHE2 --> ENRICH
     CAT_CACHE --> ENRICH
     ENRICH --> MERGE
 
@@ -44,7 +45,8 @@ flowchart TD
 
     MERGE --> STOCK
     MERGE --> SKU
-    CACHE1 & CACHE2 --> ALM
+    CACHE1 --> ALM
+    CACHE2 --> ALM
     CACHE1 --> RESUMEN
     CAT_CACHE --> CAT
 ```

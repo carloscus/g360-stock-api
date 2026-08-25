@@ -5,7 +5,7 @@
   <img alt="G360 Stock API" height="64" src="logotypes/logo-g360-dark.svg">
 </picture>
 
-> API REST para el reporte de stock S1 desde **appweb.cipsa.com.pe**. Descarga, parsea y sirve stock de VES + sucursales enriquecido con catálogo maestro.
+> API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
 [![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
@@ -16,7 +16,7 @@
 
 ```mermaid
 flowchart TD
-    ERP["appweb.cipsa.com.pe<br/>XLS General + Sucursales"]
+    ERP["Fuente de datos<br/>XLS General + Sucursales"]
     MASTER["g360-master-data<br/>catalogo_productos.json"]
 
     subgraph API["g360-stock-api"]
@@ -71,7 +71,7 @@ flowchart TD
 
 ## Descripción
 
-API REST que consume los reportes de stock desde appweb.cipsa.com.pe (ERP CIPSA), los descarga, parsea y sirve como JSON estructurado. Combina dos fuentes (general + sucursales) y las enriquece con el catálogo maestro de productos.
+API REST que consume los reportes de stock desde la fuente del cliente (ERP), los descarga, parsea y sirve como JSON estructurado. Combina dos fuentes (general + sucursales) y las enriquece con el catálogo maestro de productos.
 
 **Tipo**: API REST / Backend  
 **Runtime**: Python 3.10+ / FastAPI / Uvicorn  
@@ -85,21 +85,21 @@ API REST que consume los reportes de stock desde appweb.cipsa.com.pe (ERP CIPSA)
 sequenceDiagram
     participant FE as Frontend CIPSA
     participant API as g360-stock-api
-    participant APPWEB as appweb.cipsa.com.pe
+    participant SOURCE as Fuente de datos del cliente
     participant GH as GitHub (master-data)
 
     FE->>API: GET /stock?almacen=S5
     API->>API: _refrescar_si_es_necesario()
     alt Cache vigente (<15 min)
         API-->>FE: Datos enriquecidos (cache)
-    else Cache vencido + horario valido
-        API->>APPWEB: Descargar XLS (1x)
-        APPWEB-->>API: XLS response
+    else Cache vencido + horario válido
+        API->>SOURCE: Descargar XLS (1x)
+        SOURCE-->>API: XLS response
         API->>API: Parsear + transformar
         API->>API: Enriquecer con catálogo
         API->>API: Guardar cache + .bak
         API-->>FE: Datos frescos
-    else Cache vencido + fuera horario
+    else Cache vencido + fuera de horario
         API-->>FE: Cache viejo (cache_expirado=true)
     end
 
@@ -185,7 +185,7 @@ GET /api/v1/health
 | **Rate limiting** | 60 req/min por IP | Saturación, abuso |
 | **Request timeout** | 30s max, devuelve 504 | Requests colgados |
 | **Circuit breaker** | 3 fallos → pausa 5 min | Caída en cascada |
-| **Cache stale** | Sirve datos viejos si appweb cae | Respuestas vacías |
+| **Cache stale** | Sirve datos viejos si la fuente cae | Respuestas vacías |
 | **XLS size limit** | 5MB max por descarga | Memoria agotada |
 | **Thread-safe lock** | 1 descarga por fuente a la vez | Duplicados |
 | **CORS** | Orígenes configurables | Acceso no autorizado |
@@ -197,7 +197,7 @@ GET /api/v1/health
 
 ```
 Request → Cache vencido + horario válido
-  → Intenta descargar de appweb
+  → Intenta descargar de la fuente
   → Falla (timeout, 500, red)
   → _cb_fallos += 1
 
@@ -223,10 +223,10 @@ Después de 5 min:
 
 ## Fuentes de datos
 
-| Fuente | URL appweb | Almacenes | Cache |
+| Fuente | Parámetros | Almacenes | Cache |
 |--------|-----------|-----------|-------|
-| `general` | `parametroX2=""` | VES, 40, 92, 106, 121, 122, 129, 118 | `data/stock_cache.json` |
-| `sucursales` | `parametroX2="1"` | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 | `data/stock_cache_sucursales.json` |
+| `general` | Ver config en Render | VES, 40, 92, 106, 121, 122, 129, 118 | `data/stock_cache.json` |
+| `sucursales` | Ver config en Render | S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 | `data/stock_cache_sucursales.json` |
 | `todas` | ambas | ambos, mergeados por SKU sin duplicados | ambas |
 
 ---

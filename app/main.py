@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 import time
 from contextlib import asynccontextmanager
 
@@ -9,10 +10,11 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.security import APIKeyHeader
-from slowapi import Limiter
-from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.gzip import GZipMiddleware
+from starlette.requests import Request as StarletteRequest
+from starlette.responses import Response as StarletteResponse
+from starlette.types import ASGIApp
 
 from app.config import settings
 from app.routers import catalog, health, resumen, stock, upload
@@ -20,15 +22,67 @@ from app.services.catalog_service import catalog_service
 
 logger = logging.getLogger("g360")
 
-# ── Rate limiter ────────────────────────────────────────────────────
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.rate_limit])
+# Rutas exentas del rate limit (health checks de Render y docs publicos)
+_RUTAS_EXENTAS_RATE_LIMIT = ("/api/v1/health", "/docs", "/redoc", "/openapi.json")
 
 
-def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
-    return JSONResponse(
-        status_code=429,
-        content={"detail": f"Rate limit excedido: {exc.detail}"},
-    )
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiter por IP con ventana fija.
+
+    Nota: no usamos slowapi porque su SlowAPIMiddleware no encuentra los
+    handlers de FastAPI >= 0.115 (los routers viven en _IncludedRouter con
+    endpoint=None), por lo que los limites nunca se aplicaban.
+    Esta implementacion es autocontenida y no depende de introspeccion de rutas.
+    """
+
+    def __init__(self, app: ASGIApp, limite: str = "60/minute"):
+        super().__init__(app)
+        self._max, self._ventana = self._parsear_limite(limite)
+        self._ventanas: dict[str, tuple[float, int]] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _parsear_limite(limite: str) -> tuple[int, int]:
+        """Convierte '60/minute' en (60, 60). Soporta second/minute/hour."""
+        cantidad, _, periodo = limite.partition("/")
+        max_req = int(cantidad.strip())
+        segundos = {"second": 1, "minute": 60, "hour": 3600}.get(
+            periodo.strip().lower(), 60
+        )
+        return max_req, segundos
+
+    async def dispatch(
+        self, request: StarletteRequest, call_next
+    ) -> StarletteResponse:
+        path = request.url.path
+        if any(path.startswith(exenta) for exenta in _RUTAS_EXENTAS_RATE_LIMIT):
+            return await call_next(request)
+
+        ip = request.client.host if request.client else "unknown"
+        ahora = time.monotonic()
+        permitido = True
+        with self._lock:
+            inicio, conteo = self._ventanas.get(ip, (ahora, 0))
+            if ahora - inicio >= self._ventana:
+                inicio, conteo = ahora, 0
+            conteo += 1
+            self._ventanas[ip] = (inicio, conteo)
+            # Limpieza: si el dict crece mucho, purgar ventanas vencidas
+            if len(self._ventanas) > 10_000:
+                self._ventanas = {
+                    k: v for k, v in self._ventanas.items()
+                    if ahora - v[0] < self._ventana
+                }
+            permitido = conteo <= self._max
+
+        if not permitido:
+            logger.warning("RATE LIMIT excedido por %s en %s", ip, path)
+            return JSONResponse(
+                status_code=429,
+                content={"detail": f"Rate limit excedido: {self._max} requests por {self._ventana}s"},
+                headers={"Retry-After": str(self._ventana)},
+            )
+        return await call_next(request)
 
 
 # ── Auth ────────────────────────────────────────────────────────────
@@ -73,10 +127,11 @@ async def lifespan(app: FastAPI):
 # ── App ─────────────────────────────────────────────────────────────
 app = FastAPI(
     title="G360 Stock API",
-    description="API REST del reporte de stock S1 desde appweb.cipsa.com.pe. "
+    description="API REST de datos de stock. Procesa reportes desde la fuente "
+    "del cliente, los transforma y sirve enriquecidos con catálogo maestro. "
     "Provee acceso estructurado al stock, predespacho y disponible "
     "por producto y almacen para el ecosistema G360.",
-    version="1.1.0",
+    version="1.3.0",
     contact={
         "name": "G360 - CIPSA",
         "url": "https://github.com/carloscus",
@@ -85,8 +140,8 @@ app = FastAPI(
 )
 
 # ── Rate limiting ───────────────────────────────────────────────────
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+# /api/v1/health exenta: Render hace health checks frecuentes y no debe recibir 429
+app.add_middleware(RateLimitMiddleware, limite=settings.rate_limit)
 
 # ── Request logging + timeout ───────────────────────────────────────
 @app.middleware("http")

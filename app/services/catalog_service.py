@@ -20,6 +20,9 @@ class CatalogService:
         self._catalog: dict[str, dict] = {}
         self._fecha_carga: datetime | None = None
         self._ruta_cache = Path(settings.catalogo_ruta)
+        # Anti-storm: cooldown tras fallos consecutivos de refresh
+        self._refresh_fallos: int = 0
+        self._refresh_bloqueado_hasta: datetime | None = None
 
         # Cargar al iniciar
         self._cargar_si_existe()
@@ -75,24 +78,72 @@ class CatalogService:
         return (datetime.now(timezone.utc) - self._fecha_carga) > timedelta(seconds=settings.catalogo_ttl_segundos)
 
     def buscar(self, sku: str) -> dict | None:
-        """Busca un SKU en el catálogo. Si está stale, intenta refrescar."""
-        # Auto-refresh si el TTL expiró
-        if self.stale and self._fecha_carga:
-            self._refrescar_si_es_stale()
+        """Busca un SKU en el catálogo. Si está stale, intenta refrescar
+        con cooldown anti-storm (nunca bloquea la lectura)."""
+        self._refrescar_si_es_stale()
         return self._catalog.get(sku.strip().upper())
 
     def _refrescar_si_es_stale(self) -> None:
-        """Descarga el catálogo desde la URL remota si el TTL expiró."""
-        import httpx
-        from app.config import settings
+        """Refresca el catálogo desde la URL remota si el TTL expiró.
 
+        Anti-storm:
+        - Si un refresh ya está en curso (lock ocupado), otros hilos
+          siguen de inmediato con el cache actual (no esperan 30s).
+        - Tras N fallos consecutivos, se abre un cooldown de M minutos
+          sin reintentar (mismo patrón que el circuit breaker del stock).
+        - La lectura del catálogo nunca se bloquea por la red.
+        """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        if not self.stale:
+            return
+
+        ahora = datetime.now(timezone.utc)
+        # Cooldown activo: no reintentar
+        if self._refresh_bloqueado_hasta and ahora < self._refresh_bloqueado_hasta:
+            return
+        # Cooldown expirado: resetear
+        if self._refresh_bloqueado_hasta and ahora >= self._refresh_bloqueado_hasta:
+            self._refresh_bloqueado_hasta = None
+            self._refresh_fallos = 0
+
+        # Non-blocking: si otro hilo ya está refrescando, servir cache y salir
+        if not self._lock.acquire(blocking=False):
+            return
         try:
+            # Doble check: otro hilo pudo refrescar mientras esperábamos
+            if not self.stale:
+                return
+            import httpx
+
             respuesta = httpx.get(settings.catalogo_raw_url, timeout=30)
             respuesta.raise_for_status()
             data = respuesta.json()
-            self.cargar_desde_json(data)
+            # cargar_desde_json adquiere el lock internamente -> liberar antes
+            # para no auto-bloquear (threading.Lock no es reentrante)
         except Exception:
-            pass  # Si falla, mantener cache viejo
+            self._refresh_fallos += 1
+            if self._refresh_fallos >= settings.catalogo_refresh_max_fallos:
+                self._refresh_bloqueado_hasta = ahora + timedelta(
+                    seconds=settings.catalogo_refresh_cooldown_seg
+                )
+                logger.error(
+                    "Cooldown catalogo abierto por %ds tras %d fallos consecutivos",
+                    settings.catalogo_refresh_cooldown_seg,
+                    self._refresh_fallos,
+                )
+            else:
+                logger.warning("Refresh de catalogo fallo (intento %d/%d)",
+                               self._refresh_fallos,
+                               settings.catalogo_refresh_max_fallos)
+            return
+        finally:
+            self._lock.release()
+
+        self.cargar_desde_json(data)
+        logger.info("Catalogo refrescado automaticamente: %d SKUs", len(data.get("productos", [])))
 
     def cargar_desde_url(self, url: str) -> dict:
         """Descarga el catalogo desde una URL remota y lo carga en memoria."""

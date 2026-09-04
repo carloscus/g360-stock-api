@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Catalogo maestro
     catalogo_ruta: str = "data/catalog_cache.json"
     catalogo_ttl_segundos: int = 21600  # 6 horas
+    # Cooldown anti-storm del refresh automatico del catalogo
+    catalogo_refresh_max_fallos: int = 2
+    catalogo_refresh_cooldown_seg: int = 300  # 5 min sin reintentar tras fallos
     # Fuente remota del catalogo (para auto-cargar cuando el disco es efimero, ej: Render free)
     catalogo_raw_url: str = (
         "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"

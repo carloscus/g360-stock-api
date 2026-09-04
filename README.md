@@ -182,7 +182,7 @@ GET /api/v1/health
 
 | Capa | Qué hace | Qué previene |
 |------|----------|--------------|
-| **Rate limiting** | 60 req/min por IP | Saturación, abuso |
+| **Rate limiting** | 60 req/min por IP (`/health` exenta) | Saturación, abuso |
 | **Request timeout** | 30s max, devuelve 504 | Requests colgados |
 | **Circuit breaker** | 3 fallos → pausa 5 min | Caída en cascada |
 | **Cache stale** | Sirve datos viejos si la fuente cae | Respuestas vacías |
@@ -236,7 +236,7 @@ Después de 5 min:
 Cargado desde `g360-master-data` (JSON en GitHub):
 - **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
 - **Auto-carga** — al iniciar, si no hay catálogo en disco, descarga desde GitHub
-- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente desde GitHub
+- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente desde GitHub (con cooldown anti-storm: tras 2 fallos consecutivos espera 5 min sin reintentar; la lectura nunca se bloquea por la red)
 - **TTL** — 6 horas (21600s)
 
 Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
@@ -286,7 +286,7 @@ Variables de entorno (prefix `S1_`):
 |----------|---------|-------------|
 | `S1_API_KEY` | `""` | API Key administrativa. **Setear en Render** |
 | `S1_READ_API_KEY` | `""` | API Key de lectura para frontend |
-| `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP |
+| `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP (middleware propio; `/api/v1/health` exenta) |
 | `S1_REQUEST_TIMEOUT` | `30` | Timeout en segundos |
 | `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos |
 | `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos antes de abrir circuito |

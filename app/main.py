@@ -51,6 +51,25 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
         return max_req, segundos
 
+    @staticmethod
+    def _ip_cliente(request: StarletteRequest) -> str:
+        """IP real del cliente.
+
+        Detras de Render/Cloudflare, request.client.host es la IP del proxy
+        interno (varia por request segun el pool) y NO sirve como clave de
+        ventana. Se usa X-Forwarded-For (primer salto, seteado por el edge
+        confiable) con fallback a X-Real-IP y finalmente client.host.
+        """
+        xff = request.headers.get("x-forwarded-for")
+        if xff:
+            primer = xff.split(",")[0].strip()
+            if primer:
+                return primer
+        xr = request.headers.get("x-real-ip")
+        if xr:
+            return xr.strip()
+        return request.client.host if request.client else "unknown"
+
     async def dispatch(
         self, request: StarletteRequest, call_next
     ) -> StarletteResponse:
@@ -58,7 +77,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if any(path.startswith(exenta) for exenta in _RUTAS_EXENTAS_RATE_LIMIT):
             return await call_next(request)
 
-        ip = request.client.host if request.client else "unknown"
+        ip = self._ip_cliente(request)
         ahora = time.monotonic()
         permitido = True
         with self._lock:

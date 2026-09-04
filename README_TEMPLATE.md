@@ -159,7 +159,7 @@ GET /api/v1/resumen
 
 | Capa | Qué hace | Qué previene |
 |------|----------|--------------|
-| **Rate limiting** | 60 req/min por IP | Saturación, abuso |
+| **Rate limiting** | Doble capa: 60 req/min por IP + tope global 150/min (`/health` y docs exentas) | Saturación, abuso, costos de hosting |
 | **Request timeout** | 30s max, devuelve 504 | Requests colgados |
 | **Circuit breaker** | 3 fallos → pausa 5 min | Caída en cascada |
 | **Cache stale** | Sirve datos viejos si fuente cae | Respuestas vacías |
@@ -246,7 +246,10 @@ Variables de entorno (prefix `S1_`):
 |----------|---------|-------------|
 | `S1_API_KEY` | `""` | API Key administrativa. **Setear en {{DEPLOY_PLATFORM}}** |
 | `S1_READ_API_KEY` | `""` | API Key de lectura para frontend |
-| `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP |
+| `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP (middleware propio; `/api/v1/health` exenta) |
+| `S1_GLOBAL_RATE_LIMIT` | `150/minute` | Tope global de requests (todas las IPs sumadas) |
+| `S1_CATALOGO_REFRESH_MAX_FALLOS` | `2` | Fallos de auto-refresh del catálogo antes de cooldown |
+| `S1_CATALOGO_REFRESH_COOLDOWN_SEG` | `300` | Segundos sin reintentar refresh del catálogo tras fallos |
 | `S1_REQUEST_TIMEOUT` | `30` | Timeout en segundos |
 | `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos |
 | `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos antes de abrir circuito |

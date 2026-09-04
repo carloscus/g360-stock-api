@@ -35,10 +35,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Esta implementacion es autocontenida y no depende de introspeccion de rutas.
     """
 
-    def __init__(self, app: ASGIApp, limite: str = "60/minute"):
+    def __init__(self, app: ASGIApp, limite: str = "60/minute", global_limite: str = "150/minute"):
         super().__init__(app)
         self._max, self._ventana = self._parsear_limite(limite)
+        self._global_max, self._global_ventana = self._parsear_limite(global_limite)
         self._ventanas: dict[str, tuple[float, int]] = {}
+        self._global_ventana_state: tuple[float, int] = (0.0, 0)
         self._lock = threading.Lock()
 
     @staticmethod
@@ -80,26 +82,41 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ip = self._ip_cliente(request)
         ahora = time.monotonic()
         permitido = True
+        razon = ""
         with self._lock:
-            inicio, conteo = self._ventanas.get(ip, (ahora, 0))
-            if ahora - inicio >= self._ventana:
-                inicio, conteo = ahora, 0
-            conteo += 1
-            self._ventanas[ip] = (inicio, conteo)
-            # Limpieza: si el dict crece mucho, purgar ventanas vencidas
-            if len(self._ventanas) > 10_000:
-                self._ventanas = {
-                    k: v for k, v in self._ventanas.items()
-                    if ahora - v[0] < self._ventana
-                }
-            permitido = conteo <= self._max
+            # Tope global primero: una sola clave, determinista incluso si
+            # el proxy rota la IP percibida. Protege CPU/costos de Render.
+            g_inicio, g_conteo = self._global_ventana_state
+            if ahora - g_inicio >= self._global_ventana:
+                g_inicio, g_conteo = ahora, 0
+            g_conteo += 1
+            self._global_ventana_state = (g_inicio, g_conteo)
+            if g_conteo > self._global_max:
+                permitido = False
+                razon = "global"
+            else:
+                # Por IP: primera capa (mejor esfuerzo detras de proxy)
+                inicio, conteo = self._ventanas.get(ip, (ahora, 0))
+                if ahora - inicio >= self._ventana:
+                    inicio, conteo = ahora, 0
+                conteo += 1
+                self._ventanas[ip] = (inicio, conteo)
+                if len(self._ventanas) > 10_000:
+                    self._ventanas = {
+                        k: v for k, v in self._ventanas.items()
+                        if ahora - v[0] < self._ventana
+                    }
+                if conteo > self._max:
+                    permitido = False
+                    razon = "ip"
 
         if not permitido:
-            logger.warning("RATE LIMIT excedido por %s en %s", ip, path)
+            logger.warning("RATE LIMIT excedido (%s) por %s en %s", razon, ip, path)
+            ventana = self._global_ventana if razon == "global" else self._ventana
             return JSONResponse(
                 status_code=429,
-                content={"detail": f"Rate limit excedido: {self._max} requests por {self._ventana}s"},
-                headers={"Retry-After": str(self._ventana)},
+                content={"detail": f"Rate limit excedido: {ventana}s"},
+                headers={"Retry-After": str(ventana)},
             )
         return await call_next(request)
 
@@ -159,8 +176,13 @@ app = FastAPI(
 )
 
 # ── Rate limiting ───────────────────────────────────────────────────
-# /api/v1/health exenta: Render hace health checks frecuentes y no debe recibir 429
-app.add_middleware(RateLimitMiddleware, limite=settings.rate_limit)
+# Dos capas: por IP (mejor esfuerzo detras de proxy) + tope global
+# determinista que protege CPU/costos. /api/v1/health y docs exentos.
+app.add_middleware(
+    RateLimitMiddleware,
+    limite=settings.rate_limit,
+    global_limite=settings.global_rate_limit,
+)
 
 # ── Request logging + timeout ───────────────────────────────────────
 @app.middleware("http")

@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     cors_origins: str = "https://carloscus.github.io,http://localhost:3000,http://localhost:5173"
     # Rate limiting
     rate_limit: str = "60/minute"
+    # Tope global (todas las IPs sumadas): protege CPU/costos en Render
+    global_rate_limit: str = "150/minute"
     # Request timeout en segundos
     request_timeout: int = 30
     # Maximo tamano de XLS descargado en bytes (5MB)

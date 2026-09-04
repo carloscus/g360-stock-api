@@ -47,3 +47,20 @@ class TestRateLimiter:
         assert RateLimitMiddleware._parsear_limite("100/hour") == (100, 3600)
         # default a minuto si el periodo es desconocido
         assert RateLimitMiddleware._parsear_limite("5/weird") == (5, 60)
+
+    def test_ip_distribuida_cae_en_tope_global(self):
+        """Simula proxy que rota la IP: cada request una IP distinta.
+        El limite por IP no se alcanza, pero el tope global si."""
+        ips = [f"203.0.113.{i}" for i in range(200)]
+        codigos = [
+            client.get(
+                "/api/v1/stock?limit=1", headers={"X-Forwarded-For": ip}
+            ).status_code
+            for ip in ips
+        ]
+        n_429 = codigos.count(429)
+        assert n_429 > 0, "tope global no se activo con 200 IPs distintas"
+        # Todos los 429 deben tener Retry-After
+        r = client.get("/api/v1/stock?limit=1", headers={"X-Forwarded-For": "203.0.113.999"})
+        if r.status_code == 429:
+            assert "Retry-After" in r.headers

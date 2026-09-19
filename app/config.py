@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # Clave de lectura para clientes estaticos. Puede ser publica, pero no
     # debe reutilizar la clave administrativa de upload/catalogo.
     read_api_key: str = ""
-    cache_ttl_segundos: int = 900
+    cache_ttl_segundos: int = 600  # 10 minutos: fuente online + mucha variacion en temporada
     cache_ruta: str = "data/stock_cache.json"
     cache_ruta2: str = "data/stock_cache_sucursales.json"
     puerto: int = 8000

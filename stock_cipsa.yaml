@@ -12,7 +12,7 @@ services:
       - key: S1_SOURCE2_URL
         value: "https://your-erp-host:port/path/to/report?parametro=1"
       - key: S1_CACHE_TTL_SEGUNDOS
-        value: "900"
+        value: "600"
       - key: S1_CACHE_RUTA
         value: "data/stock_cache.json"
       - key: S1_CACHE_RUTA2

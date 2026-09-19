@@ -167,7 +167,7 @@ app = FastAPI(
     "del cliente, los transforma y sirve enriquecidos con catálogo maestro. "
     "Provee acceso estructurado al stock, predespacho y disponible "
     "por producto y almacen para el ecosistema G360.",
-    version="1.3.0",
+    version="1.4.0",
     contact={
         "name": "G360 - CIPSA",
         "url": "https://github.com/carloscus",
@@ -228,10 +228,12 @@ async def root():
 
 
 # ── Routers ─────────────────────────────────────────────────────────
-# Lectura protegida con una clave de alcance reducido para GitHub Pages.
-# Se acepta tambien la clave administrativa durante la transicion para no
-# romper clientes existentes que ya consumen GET con X-API-Key.
-app.include_router(health.router, dependencies=[Depends(verificar_read_api_key)])
+# /api/v1/health es publico (sin API key) para que el healthcheck de
+# Render funcione (Render no puede enviar headers custom). Solo expone
+# estado del cache. El resto de GET de lectura usa la clave de alcance
+# reducido; tambien se acepta la clave administrativa durante la transicion
+# para no romper clientes existentes que ya consumen GET con X-API-Key.
+app.include_router(health.router)
 app.include_router(stock.router, dependencies=[Depends(verificar_read_api_key)])
 app.include_router(upload.router, dependencies=[Depends(verificar_api_key)])
 app.include_router(resumen.router, dependencies=[Depends(verificar_api_key)])

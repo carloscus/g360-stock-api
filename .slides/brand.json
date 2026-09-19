@@ -1,0 +1,39 @@
+{
+  "fidelity": "brand",
+  "template": null,
+  "fonts": {
+    "heading": "Calibri",
+    "body": "Calibri"
+  },
+  "colours": {
+    "accent": "#00D084",
+    "accent2": "#00796B",
+    "accent3": "#4BACC6",
+    "accent4": "#8064A2",
+    "accent5": "#F79646",
+    "accent6": "#C0504D",
+    "ink": "#F0F4F8",
+    "paper": "#0B1220",
+    "muted": "#94A3B8"
+  },
+  "tokens": {
+    "colour_roles": {
+      "ink": "#F0F4F8",
+      "paper": "#0B1220",
+      "accent": "#00D084",
+      "muted": "#94A3B8"
+    },
+    "grid": {
+      "margin_x": 609585,
+      "margin_top": 548640,
+      "margin_bottom": 548640,
+      "columns": 12,
+      "gutter": 203601,
+      "baseline": 91211
+    },
+    "shape": {
+      "corner": "rounded",
+      "hairline_pt": 1.0
+    }
+  }
+}

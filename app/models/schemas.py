@@ -46,7 +46,7 @@ class MetadataStock(BaseModel):
     total_skus: int = Field(0, description="Cantidad total de SKU unicos (sin paginacion)")
     total_almacenes: int = Field(0, description="Cantidad de almacenes")
     cache_expirado: bool = Field(False, description="Indica si se sirvio cache vencido")
-    cache_expiro_en: int = Field(900, description="TTL del cache en segundos")
+    cache_expiro_en: int = Field(600, description="TTL del cache en segundos")
     offset: Optional[int] = Field(None, description="Offset aplicado en la paginacion")
     limit: Optional[int] = Field(None, description="Limite aplicado en la paginacion")
     enriquecido: bool = Field(False, description="Indica si se sirvio con datos del catalogo")

@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
@@ -196,19 +197,20 @@ class ServicioStock:
         if fuente not in ("general", "sucursales"):
             raise ValueError(f"fuente debe ser 'general' o 'sucursales', no '{fuente}'")
         datos = parsear_stock_desde_xls(ruta)
-        if fuente == "sucursales":
-            self._datos_sucursales = datos
-            self._items_sucursales = self._transformar_items(datos)
-            self._enriched_sucursales = self._enriquecer_items(self._items_sucursales)
-            self._fecha_sucursales = datetime.now(timezone.utc)
-            self._guardar_cache(settings.cache_ruta2, "sucursales")
-        else:
-            self._datos_general = datos
-            self._items_general = self._transformar_items(datos)
-            self._enriched_general = self._enriquecer_items(self._items_general)
-            self._fecha_general = datetime.now(timezone.utc)
-            self._guardar_cache(settings.cache_ruta, "general")
-        self._rebuild_todas()
+        with self._lock:
+            if fuente == "sucursales":
+                self._datos_sucursales = datos
+                self._items_sucursales = self._transformar_items(datos)
+                self._enriched_sucursales = self._enriquecer_items(self._items_sucursales)
+                self._fecha_sucursales = datetime.now(timezone.utc)
+                self._guardar_cache(settings.cache_ruta2, "sucursales")
+            else:
+                self._datos_general = datos
+                self._items_general = self._transformar_items(datos)
+                self._enriched_general = self._enriquecer_items(self._items_general)
+                self._fecha_general = datetime.now(timezone.utc)
+                self._guardar_cache(settings.cache_ruta, "general")
+            self._rebuild_todas()
         codigos = self._obtener_codigos_almacen(datos)
         return len(self._obtener_enriched_segun_fuente(fuente)), len(codigos)
 
@@ -473,9 +475,10 @@ class ServicioStock:
             # Si otro hilo ya actualizo mientras esperamos el lock, salir
             if fecha and datetime.now(timezone.utc) - fecha < timedelta(seconds=settings.cache_ttl_segundos):
                 return
+            ruta_tmp = None
             try:
-                ruta = self._descargar_xls(url)
-                datos = parsear_stock_desde_xls(ruta)
+                ruta_tmp = self._descargar_xls(url)
+                datos = parsear_stock_desde_xls(ruta_tmp)
                 items = self._transformar_items(datos)
                 enriched = self._enriquecer_items(items)
                 ahora = datetime.now(timezone.utc)
@@ -495,7 +498,6 @@ class ServicioStock:
                     self._cb_abierto_general = None
                 self._rebuild_todas()
                 self._guardar_cache(cache_ruta, fuente)
-                Path(ruta).unlink(missing_ok=True)
                 logger.info("Cache %s actualizado: %d SKUs", fuente, len(items))
             except Exception:
                 # Actualizar circuit breaker
@@ -516,9 +518,13 @@ class ServicioStock:
                     raise RuntimeError(
                         f"No hay datos en cache y la descarga desde appweb fallo (fuente={fuente})."
                     ) from None
+            finally:
+                if ruta_tmp:
+                    Path(ruta_tmp).unlink(missing_ok=True)
 
     def _descargar_xls(self, url: str) -> str:
-        for intento in range(2):
+        max_intentos = 4
+        for intento in range(max_intentos):
             try:
                 respuesta = httpx.get(
                     url,
@@ -534,9 +540,18 @@ class ServicioStock:
                         f"XLS demasiado grande: {content_length} bytes (max: {settings.xls_max_bytes})"
                     )
                 break
-            except (httpx.TimeoutException, httpx.NetworkError) as e:
-                if intento == 1:
-                    raise  # reintentado una vez, fallo de nuevo
+            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+                if intento == max_intentos - 1:
+                    raise  # reintentado todas las veces, fallo de nuevo
+                if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                    raise  # 4xx: fallo definitivo, no reintentar
+                es_pool = "pool" in str(e).lower()
+                backoff = 2 if es_pool else 1
+                logger.warning(
+                    "Descarga XLS intento %d/%d fallo (%s; pool_timeout=%s), reintentando en %ds",
+                    intento + 1, max_intentos, e, es_pool, backoff,
+                )
+                time.sleep(backoff * (intento + 1))
                 continue
         sufijo = self._inferir_extension(respuesta)
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=sufijo)

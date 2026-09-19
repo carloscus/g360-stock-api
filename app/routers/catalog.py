@@ -12,6 +12,7 @@ from app.models.schemas import (
     CatalogoResponse,
     CatalogUploadResponse,
 )
+from app.config import settings
 from app.services.catalog_service import catalog_service
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,11 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
 
     try:
         contenido = await archivo.read()
+        if len(contenido) > settings.xls_max_bytes:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Archivo demasiado grande: {len(contenido)} bytes (max: {settings.xls_max_bytes})",
+            )
         data = json.loads(contenido.decode("utf-8"))
     except json.JSONDecodeError as e:
         raise HTTPException(status_code=422, detail=f"JSON invalido: {e}")

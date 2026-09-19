@@ -10,6 +10,7 @@ Todas las peticiones requieren el header:
 ```
 X-API-Key: [TU_API_KEY]
 ```
+> **Excepción:** `GET /api/v1/health` es **público** (sin key) para que el healthcheck de Render funcione.
 
 ## Documentación interactiva
 ```
@@ -144,12 +145,12 @@ print(r.json())
 ## Nota para desarrolladores
 
 - La API tiene **rate limiting**: máximo 60 requests/minuto por IP
-- Los datos se cachean cada 15 minutos (TTL configurable)
+- Los datos se cachean cada 10 minutos (TTL configurable)
 - Si la API responde `cache_expirado: true`, los datos pueden estar desactualizados
 - El horario de actualización automática es Lun-Sáb 7:00-22:59 (Lima)
 
 ---
 
-**API version:** 1.3.0  
+**API version:** 1.4.0  
 **Repositorio:** https://github.com/carloscus/g360-stock-api  
 **Swagger docs:** https://g360-stock-api.onrender.com/docs

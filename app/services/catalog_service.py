@@ -5,11 +5,14 @@ Lee el catálogo JSON generado por g360-master-data y lo mantiene en memoria.
 from __future__ import annotations
 
 import json
+import logging
 import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class CatalogService:
@@ -93,10 +96,6 @@ class CatalogService:
           sin reintentar (mismo patrón que el circuit breaker del stock).
         - La lectura del catálogo nunca se bloquea por la red.
         """
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         if not self.stale:
             return
 
@@ -117,9 +116,24 @@ class CatalogService:
             if not self.stale:
                 return
             import httpx
+            import time
 
-            respuesta = httpx.get(settings.catalogo_raw_url, timeout=30)
-            respuesta.raise_for_status()
+            respuesta = None
+            for intento in range(3):
+                try:
+                    respuesta = httpx.get(settings.catalogo_raw_url, timeout=30)
+                    respuesta.raise_for_status()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+                    if intento == 2:
+                        raise
+                    if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                        raise
+                    logger.warning(
+                        "Refresh catalogo intento %d/3 fallo: %s",
+                        intento + 1, e,
+                    )
+                    time.sleep(2 * (intento + 1))
             data = respuesta.json()
             # cargar_desde_json adquiere el lock internamente -> liberar antes
             # para no auto-bloquear (threading.Lock no es reentrante)
@@ -143,15 +157,34 @@ class CatalogService:
             self._lock.release()
 
         self.cargar_desde_json(data)
+        # Refresco exitoso: resetear contador de fallos para no arrastrar
+        # fallos antiguos hacia el proximo cooldown.
+        self._refresh_fallos = 0
+        self._refresh_bloqueado_hasta = None
         logger.info("Catalogo refrescado automaticamente: %d SKUs", len(data.get("productos", [])))
 
     def cargar_desde_url(self, url: str) -> dict:
         """Descarga el catalogo desde una URL remota y lo carga en memoria."""
         import httpx
+        import time
 
         try:
-            respuesta = httpx.get(url, timeout=30)
-            respuesta.raise_for_status()
+            respuesta = None
+            for intento in range(3):
+                try:
+                    respuesta = httpx.get(url, timeout=30)
+                    respuesta.raise_for_status()
+                    break
+                except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+                    if intento == 2:
+                        raise
+                    if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                        raise
+                    logger.warning(
+                        "Descarga catalogo intento %d/3 fallo: %s",
+                        intento + 1, e,
+                    )
+                    time.sleep(2 * (intento + 1))
             data = respuesta.json()
         except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError, json.JSONDecodeError) as e:
             return {"ok": False, "error": f"No se pudo descargar el catalogo: {e}", "total_skus": 0}

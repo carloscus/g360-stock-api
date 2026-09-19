@@ -7,7 +7,7 @@
 
 > API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)](https://fastapi.tiangolo.com/)
@@ -90,7 +90,7 @@ sequenceDiagram
 
     FE->>API: GET /stock?almacen=S5
     API->>API: _refrescar_si_es_necesario()
-    alt Cache vigente (<15 min)
+    alt Cache vigente (<10 min)
         API-->>FE: Datos enriquecidos (cache)
     else Cache vencido + horario válido
         API->>SOURCE: Descargar XLS (1x)
@@ -103,7 +103,7 @@ sequenceDiagram
         API-->>FE: Cache viejo (cache_expirado=true)
     end
 
-    Note over API,GH: Catálogo auto-refresh cada 6h
+    Note over API,GH: Catálogo auto-refresh cada 6h (3 intentos + cooldown anti-storm)
     API->>GH: GET catalogo_productos.json
     GH-->>API: JSON catálogo
     API->>API: Re-enriquecer items
@@ -184,12 +184,13 @@ GET /api/v1/health
 |------|----------|--------------|
 | **Rate limiting** | Doble capa: 60 req/min por IP + tope global 150/min (`/health` y docs exentas) | Saturación, abuso, costos de Render |
 | **Request timeout** | 30s max, devuelve 504 | Requests colgados |
+| **Reintentos con backoff** | Descargas con reintentos automáticos (red/timeout/5xx) + backoff progresivo (catálogo: 3 intentos; XLS: 4) | Fallos transitorios de red/ERP |
 | **Circuit breaker** | 3 fallos → pausa 5 min | Caída en cascada |
 | **Cache stale** | Sirve datos viejos si la fuente cae | Respuestas vacías |
-| **XLS size limit** | 5MB max por descarga | Memoria agotada |
+| **XLS size limit** | 5MB max por descarga y por upload (413) | Memoria agotada |
 | **Thread-safe lock** | 1 descarga por fuente a la vez | Duplicados |
 | **CORS** | Orígenes configurables | Acceso no autorizado |
-| **API Key** | Header X-API-Key requerido | Acceso sin auth |
+| **API Key** | Header X-API-Key requerido (`/api/v1/health` público para Render) | Acceso sin auth |
 | **GZip** | Compresión automática >500 bytes | Ancho de banda |
 | **Request logging** | method, path, status, elapsed, IP | Trazabilidad |
 
@@ -199,7 +200,8 @@ GET /api/v1/health
 Request → Cache vencido + horario válido
   → Intenta descargar de la fuente
   → Falla (timeout, 500, red)
-  → _cb_fallos += 1
+    → Reintenta con backoff (2-6s)
+  → Si sigue fallando → _cb_fallos += 1
 
 3 fallos consecutivos:
   → Circuito ABIERTO por 5 minutos
@@ -236,7 +238,8 @@ Después de 5 min:
 Cargado desde `g360-master-data` (JSON en GitHub):
 - **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
 - **Auto-carga** — al iniciar, si no hay catálogo en disco, descarga desde GitHub
-- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente desde GitHub (con cooldown anti-storm: tras 2 fallos consecutivos espera 5 min sin reintentar; la lectura nunca se bloquea por la red)
+- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente desde GitHub (cooldown anti-storm: tras 2 fallos consecutivos espera 5 min sin reintentar; la lectura nunca se bloquea por la red)
+- **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
 Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
@@ -258,7 +261,8 @@ Backup rotativo (`.bak`) si el principal se corrompe. Los items se enriquecen **
 2. **Cache vigente** (< TTL) → sirve directo
 3. **Cache vencido + horario válido** (L-S 7:00–22:59 Lima) → descarga fresh
 4. **Cache vencido + fuera de horario** → sirve cache vencido (`cache_expirado=true`)
-5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min
+5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~10 min
+6. **Descarga con errores transitorios** → red/timeout/5xx se reintentan con backoff (2–8s) antes de dar el fallo por definitivo
 
 ---
 
@@ -272,7 +276,7 @@ Variables de entorno (prefix `S1_`):
 |----------|---------|-------------|
 | `S1_SOURCE1_URL` | URL appweb | Fuente general |
 | `S1_SOURCE2_URL` | URL appweb | Fuente sucursales |
-| `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache de stock (15 min) |
+| `S1_CACHE_TTL_SEGUNDOS` | `600` | TTL del cache de stock (10 min) |
 | `S1_CACHE_RUTA` | `data/stock_cache.json` | Cache general |
 | `S1_CACHE_RUTA2` | `data/stock_cache_sucursales.json` | Cache sucursales |
 | `S1_CATALOGO_RUTA` | `data/catalog_cache.json` | Cache catálogo |
@@ -285,7 +289,7 @@ Variables de entorno (prefix `S1_`):
 | Variable | Default | Descripción |
 |----------|---------|-------------|
 | `S1_API_KEY` | `""` | API Key administrativa. **Setear en Render** |
-| `S1_READ_API_KEY` | `""` | API Key de lectura para frontend |
+| `S1_READ_API_KEY` | `""` | API Key de lectura para frontend (`/health` es público para healthcheck) |
 | `S1_RATE_LIMIT` | `60/minute` | Rate limiting por IP (middleware propio; `/api/v1/health` exenta) |
 | `S1_GLOBAL_RATE_LIMIT` | `150/minute` | Tope global de requests (todas las IPs sumadas). Determinista incluso si el proxy rota la IP percibida |
 | `S1_CATALOGO_REFRESH_MAX_FALLOS` | `2` | Fallos consecutivos de auto-refresh del catálogo antes de abrir cooldown |
@@ -294,7 +298,7 @@ Variables de entorno (prefix `S1_`):
 | `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos |
 | `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos antes de abrir circuito |
 | `S1_CIRCUIT_BREAKER_RESET_SEG` | `300` | Segundos para resetear circuito |
-| `S1_XLS_MAX_BYTES` | `5242880` | Máximo tamaño de XLS (5 MB) |
+| `S1_XLS_MAX_BYTES` | `5242880` | Máximo tamaño de XLS/JSON (5 MB) en descargas y uploads |
 
 ---
 

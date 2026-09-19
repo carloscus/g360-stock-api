@@ -1,13 +1,4 @@
+.slides/node_modules/
+Manual_API_Equipo.review/
 __pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-dist/
-build/
-.venv/
-venv/
-env/
-*.env
 data/
-*.log
-.DS_Store

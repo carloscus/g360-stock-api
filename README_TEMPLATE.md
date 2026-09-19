@@ -161,12 +161,13 @@ GET /api/v1/resumen
 |------|----------|--------------|
 | **Rate limiting** | Doble capa: 60 req/min por IP + tope global 150/min (`/health` y docs exentas) | Saturación, abuso, costos de hosting |
 | **Request timeout** | 30s max, devuelve 504 | Requests colgados |
+| **Reintentos con backoff** | Descargas con reintentos automáticos (red/timeout/5xx) + backoff progresivo (catálogo: 3 intentos; XLS: 4) | Fallos transitorios de red/ERP |
 | **Circuit breaker** | 3 fallos → pausa 5 min | Caída en cascada |
 | **Cache stale** | Sirve datos viejos si fuente cae | Respuestas vacías |
-| **{{DATA_FORMAT}} size limit** | 5MB max por descarga | Memoria agotada |
+| **{{DATA_FORMAT}} size limit** | 5MB max por descarga y por upload (413) | Memoria agotada |
 | **Thread-safe lock** | 1 descarga por fuente a la vez | Duplicados |
 | **CORS** | Orígenes configurables | Acceso no autorizado |
-| **API Key** | Header X-API-Key requerido | Acceso sin auth |
+| **API Key** | Header X-API-Key requerido (`/health` público para healthcheck) | Acceso sin auth |
 | **GZip** | Compresión automática >500 bytes | Ancho de banda |
 | **Request logging** | method, path, status, elapsed, IP | Trazabilidad |
 
@@ -196,7 +197,8 @@ GET /api/v1/resumen
 Cargado desde `g360-master-data` (JSON en GitHub):
 - **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
 - **Auto-carga** — al iniciar, si no hay catálogo en disco, descarga desde GitHub
-- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente
+- **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente (cooldown anti-storm: tras 2 fallos consecutivos espera 5 min sin reintentar; la lectura nunca se bloquea por la red)
+- **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
 Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
@@ -218,7 +220,7 @@ Backup rotativo (`.bak`) si el principal se corrompe. Los items se enriquecen **
 2. **Cache vigente** (< TTL) → sirve directo
 3. **Cache vencido + horario válido** (L-S 7:00–22:59 Lima) → descarga fresh
 4. **Cache vencido + fuera de horario** → sirve cache vencido (`cache_expirado=true`)
-5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~15 min
+5. **Descarga falla + hay cache** → sirve cache vencido, reintenta en ~10 min
 
 ---
 
@@ -232,7 +234,7 @@ Variables de entorno (prefix `S1_`):
 |----------|---------|-------------|
 | `S1_SOURCE1_URL` | URL {{DATA_SOURCE}} | Fuente general |
 | `S1_SOURCE2_URL` | URL {{DATA_SOURCE}} | Fuente sucursales |
-| `S1_CACHE_TTL_SEGUNDOS` | `900` | TTL del cache de stock (15 min) |
+| `S1_CACHE_TTL_SEGUNDOS` | `600` | TTL del cache de stock (10 min) |
 | `S1_CACHE_RUTA` | `{{CACHE_1}}` | Cache general |
 | `S1_CACHE_RUTA2` | `{{CACHE_2}}` | Cache sucursales |
 | `S1_CATALOGO_RUTA` | `{{CAT_CACHE}}` | Cache catálogo |

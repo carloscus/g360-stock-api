@@ -172,7 +172,45 @@ class ServicioStock:
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_enriched_segun_fuente(fuente)
         mapa = {i.sku: i for i in items}
-        return mapa.get(sku)
+        item = mapa.get(sku)
+        if item is not None:
+            return item
+        # Sin stock en el reporte: si el SKU esta en el catalogo maestro,
+        # responder la ficha con almacenes vacíos y sin_stock=True en vez de
+        # 404, para que el consumidor distinga "producto vigente sin stock"
+        # de "SKU inexistente".
+        return self._item_desde_catalogo(sku)
+
+    def _item_desde_catalogo(self, sku: str) -> ItemStockEnriched | None:
+        """Construye una ficha de catalogo para un SKU sin stock en el reporte."""
+        cat = catalog_service.buscar(sku.upper())
+        if not cat:
+            return None
+        linea = cat.get("linea", "").strip()
+        linea_id = _extraer_linea_id(linea) or sku[:2]
+        return ItemStockEnriched(
+            sku=sku.upper(),
+            descripcion=cat.get("nombre", ""),
+            um="",
+            linea=linea,
+            grupo=cat.get("grupo", ""),
+            tipo=cat.get("tipo", ""),
+            familia=cat.get("familia", ""),
+            categoria=cat.get("categoria", ""),
+            almacenes=[],
+            estado_linea=cat.get("estado_linea", ""),
+            linea_id=linea_id,
+            sin_catalogo=False,
+            un_bx=cat.get("un_bx", 1),
+            peso_kg=cat.get("peso_kg", 0.0),
+            precio=cat.get("precio", 0.0),
+            nombre_corto=cat.get("nombre_corto", ""),
+            ean13=cat.get("ean13", ""),
+            ean14=cat.get("ean14", ""),
+            keywords=cat.get("keywords", []),
+            orden=cat.get("orden", 0),
+            sin_stock=True,
+        )
 
     def re_enriquecer(self) -> None:
         """Re-enriquece todos los items con el catalogo actual.

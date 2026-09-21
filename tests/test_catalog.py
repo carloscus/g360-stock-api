@@ -244,3 +244,59 @@ class TestCargarDesdeUrl:
         assert resultado["ok"] is False
         assert "error" in resultado
         assert not catalog_service.cargado
+
+
+class TestSkuSinStock:
+    """SKU en catalogo pero ausente del reporte de stock -> ficha con sin_stock."""
+
+    def test_sku_en_catalogo_sin_stock_retorna_ficha(self, monkeypatch):
+        from app.services.catalog_service import catalog_service as cat
+        from app.services.s1_service import servicio_stock
+
+        cat._catalog = {"76250": {
+            "sku": "76250", "nombre": "BOLIGRAFO VINIFAN TRIFAN 32 M NEGRO DISPLAY X50",
+            "un_bx": 28, "precio": 17.77, "linea": "ESCRITURA",
+            "grupo": "BOLIGRAFO", "tipo": "DISPLAY", "familia": "TINTA SECA",
+            "categoria": "VINIFAN", "ean13": "7754807762502", "ean14": "17754807762509",
+            "keywords": [], "orden": 588, "estado_linea": "NUEVO", "peso_kg": 0.0,
+            "nombre_corto": "Boligrafo Trifan 32 M Negro Display X50",
+        }}
+        cat._fecha_carga = None
+        # Vaciar stock para que el fallback sea el unico camino
+        servicio_stock._items_general = []
+        servicio_stock._items_sucursales = []
+        servicio_stock._enriched_general = []
+        servicio_stock._enriched_sucursales = []
+        servicio_stock._rebuild_todas()
+
+        item = servicio_stock.obtener_sku_enriched("76250")
+        assert item is not None
+        assert item.sin_stock is True
+        assert item.almacenes == []
+        assert item.un_bx == 28
+        assert item.precio == 17.77
+        assert item.sku == "76250"
+
+    def test_sku_inexistente_devuelve_none(self):
+        from app.services.catalog_service import catalog_service as cat
+        from app.services.s1_service import servicio_stock
+
+        cat._catalog = {}
+        servicio_stock._items_general = []
+        servicio_stock._items_sucursales = []
+        servicio_stock._enriched_general = []
+        servicio_stock._enriched_sucursales = []
+        servicio_stock._rebuild_todas()
+
+        assert servicio_stock.obtener_sku_enriched("ZZZZZ99") is None
+
+    def test_sku_en_stock_sin_cambiar_flags(self):
+        """Un SKU presente en el reporte no debe marcar sin_stock."""
+        from app.services.catalog_service import catalog_service as cat
+        from app.services.s1_service import servicio_stock
+
+        cat._catalog = {}
+        item = servicio_stock.obtener_sku_enriched("0123ABC")
+        if item is not None:
+            assert item.sin_stock is False
+            assert item.sin_catalogo is True

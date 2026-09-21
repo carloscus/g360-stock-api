@@ -7,7 +7,7 @@
 
 > API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)](https://fastapi.tiangolo.com/)
@@ -118,6 +118,8 @@ sequenceDiagram
 | `GET` | `/api/v1/health` | Estado del servicio y cache |
 | `GET` | `/api/v1/stock` | Listar stock completo con filtros (enriquecido) |
 | `GET` | `/api/v1/stock/{sku}` | Detalle de un SKU con desglose por almacén |
+
+> **SKUs sin stock aún**: si el SKU existe en el catálogo maestro pero no aparece en el reporte (ingreso futuro), `/stock/{sku}` responde **200** con `sin_stock: true` y `almacenes: []`. Obtener **404** significa que el SKU no existe ni en el reporte ni en el catálogo.
 | `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles |
 | `GET` | `/api/v1/lineas` | Lista de líneas de producto |
 | `GET` | `/api/v1/categorias` | Categorías de negocio con líneas |

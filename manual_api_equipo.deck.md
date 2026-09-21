@@ -10,7 +10,7 @@ motif: La línea de terminal repite en cada slide operativo: el comando real de 
 layout: title
 Canvas: ink
 Title: G360 Stock API
-Subtitle: Manual de acceso para el equipo · v1.4.0
+Subtitle: Manual de acceso para el equipo · v1.5.0
 Brief: Tapa clara (ink) con el nombre del servicio; el motivo asoma como una línea de terminal dibujada a la derecha, con la URL base y la promesa de que todo lo que sigue es una llamada.
 Notes: La tapa presenta el manual y su versión. El equipo sale de esta nota sabiendo que cada consulta es una URL + un header, y que todo lo demás son ejemplos de esa llamada.
 
@@ -150,6 +150,6 @@ Notes: La API limita a 60 peticiones por minuto por IP. El stock se cachea 10 mi
 layout: title
 Canvas: ink
 Title: Listo para consultar
-Subtitle: Swagger /docs · Repositorio github.com/carloscus/g360-stock-api · v1.4.0
+Subtitle: Swagger /docs · Repositorio github.com/carloscus/g360-stock-api · v1.5.0
 Brief: Cierre claro que devuelve la atención a los recursos: el Swagger, el repo y la versión vigente del manual.
-Notes: El manual termina con las tres rutas útiles: la documentación interactiva, el repositorio del servicio y la versión vigente (1.4.0).
+Notes: El manual termina con las tres rutas útiles: la documentación interactiva, el repositorio del servicio y la versión vigente (1.5.0).

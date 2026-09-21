@@ -127,9 +127,35 @@ print(r.json())
   "precio": 10.25,
   "ean13": "7754807020015",
   "un_bx": 25,
-  "sin_catalogo": false
+  "sin_catalogo": false,
+  "sin_stock": false
 }
 ```
+
+### ¿Qué significa el flag `sin_stock`?
+
+Consulta un SKU que todavía no aparece en el reporte de stock pero existe en el catálogo maestro:
+`GET /api/v1/stock/76250` → **200 OK** con la ficha y `sin_stock: true`:
+
+```json
+{
+  "sku": "76250",
+  "linea": "ESCRITURA",
+  "un_bx": 28,
+  "precio": 17.77,
+  "sin_catalogo": false,
+  "sin_stock": true,
+  "almacenes": []
+}
+```
+
+Leer los tres estados:
+
+| Estado | Respuesta | Significado |
+|--------|-----------|-------------|
+| `sin_stock: true` | 200 OK | Producto vigente en catálogo, aún sin stock en el reporte (ingreso futuro) |
+| `sin_catalogo: true` | 200 OK | Tiene stock pero la ficha está incompleta (falta en el catálogo) |
+| **404** | error | El SKU no existe ni en el reporte ni en el catálogo |
 
 ---
 
@@ -151,6 +177,6 @@ print(r.json())
 
 ---
 
-**API version:** 1.4.0  
+**API version:** 1.5.0  
 **Repositorio:** https://github.com/carloscus/g360-stock-api  
 **Swagger docs:** https://g360-stock-api.onrender.com/docs

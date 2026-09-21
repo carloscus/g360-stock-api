@@ -38,6 +38,7 @@ class ItemStockEnriched(ItemStock):
     ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
+    sin_stock: bool = Field(False, description="True si el producto existe en catalogo pero no tiene stock en el reporte")
 
 
 class MetadataStock(BaseModel):

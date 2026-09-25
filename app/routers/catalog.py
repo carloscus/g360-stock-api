@@ -59,6 +59,7 @@ async def subir_catalogo(archivo: UploadFile = File(..., description="catalogo_p
         total_skus=result["total_skus"],
         con_ean14=result["con_ean14"],
         con_unbx=result["con_unbx"],
+        descontinuados=result["descontinuados"],
     )
 
 

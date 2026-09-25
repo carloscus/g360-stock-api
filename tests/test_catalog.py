@@ -78,7 +78,7 @@ class TestCatalogList:
 
         required = {"sku", "nombre", "linea", "grupo", "tipo", "familia", "categoria",
                     "estado_linea", "un_bx", "peso_kg", "precio", "ean13", "ean14",
-                    "keywords", "orden"}
+                    "keywords", "orden", "descontinuado"}
         assert required.issubset(set(items[0].keys()))
         assert all("almacenes" not in it for it in items)
 
@@ -300,3 +300,69 @@ class TestSkuSinStock:
         if item is not None:
             assert item.sin_stock is False
             assert item.sin_catalogo is True
+
+
+class TestDescontinuado:
+    """El marcador descontinuado debe viajar catalogo -> enrich -> JSON."""
+
+    @staticmethod
+    def _cargar(catalogo):
+        from datetime import datetime, timezone
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = catalogo
+        # Fecha fresca: evita el refresh remoto (sin red en tests)
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = {}
+        cat._fecha_carga = None
+
+    def test_enrich_propaga_marcador(self):
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79050": {"sku": "79050", "nombre": "TIJERA", "descontinuado": True},
+                "011019": {"sku": "011019", "nombre": "PELOTA", "descontinuado": False},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79050"), ItemStock(sku="011019"), ItemStock(sku="NADIE")])
+            por_sku = {i.sku: i for i in items}
+            assert por_sku["79050"].descontinuado is True
+            assert por_sku["011019"].descontinuado is False
+            # Sin catalogo: default False
+            assert por_sku["NADIE"].descontinuado is False
+            assert por_sku["NADIE"].sin_catalogo is True
+        finally:
+            self._limpiar()
+
+    def test_ficha_sin_stock_propaga_marcador(self):
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79050": {"sku": "79050", "nombre": "TIJERA", "descontinuado": True},
+            })
+            item = servicio_stock._item_desde_catalogo("79050")
+            assert item is not None
+            assert item.sin_stock is True
+            assert item.descontinuado is True
+        finally:
+            self._limpiar()
+
+    def test_upload_cuenta_descontinuados(self):
+        respuesta = client.post(
+            "/api/v1/catalog/upload",
+            files={"archivo": ("catalogo_productos.json",
+                               '{"productos": [{"sku": "A", "descontinuado": true},'
+                               ' {"sku": "B"}]}',
+                               "application/json")}
+        )
+        assert respuesta.status_code == 200
+        try:
+            datos = respuesta.json()
+            assert datos["total_skus"] == 2
+            assert datos["descontinuados"] == 1
+        finally:
+            self._limpiar()

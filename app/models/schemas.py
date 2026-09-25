@@ -39,6 +39,7 @@ class ItemStockEnriched(ItemStock):
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo (SKU_BX)")
     sin_stock: bool = Field(False, description="True si el producto existe en catalogo pero no tiene stock en el reporte")
+    descontinuado: bool = Field(False, description="True si el ERP lo marca descontinuado (curado en SKU_BX para la venta)")
 
 
 class MetadataStock(BaseModel):
@@ -88,6 +89,7 @@ class CatalogUploadResponse(BaseModel):
     total_skus: int = Field(0, description="SKU cargados en el catalogo")
     con_ean14: int = Field(0, description="SKU con EAN-14")
     con_unbx: int = Field(0, description="SKU con un_bx > 1")
+    descontinuados: int = Field(0, description="SKU marcados descontinuados")
 
 
 class CatalogHealthResponse(BaseModel):
@@ -115,6 +117,7 @@ class CatalogoEntry(BaseModel):
     ean14: str = Field(default="", description="Codigo de envio EAN-14 (GS1)")
     keywords: list[str] = Field(default_factory=list, description="Keywords para busqueda")
     orden: int = Field(0, description="Orden indice maestro del catalogo")
+    descontinuado: bool = Field(False, description="True si el ERP lo marca descontinuado (curado en SKU_BX para la venta)")
 
 
 class CatalogoMetadata(BaseModel):

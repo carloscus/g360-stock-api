@@ -177,6 +177,6 @@ Leer los tres estados:
 
 ---
 
-**API version:** 1.5.0  
+**API version:** 1.6.0  
 **Repositorio:** https://github.com/carloscus/g360-stock-api  
 **Swagger docs:** https://g360-stock-api.onrender.com/docs

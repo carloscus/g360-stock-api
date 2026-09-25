@@ -210,6 +210,7 @@ class ServicioStock:
             keywords=cat.get("keywords", []),
             orden=cat.get("orden", 0),
             sin_stock=True,
+            descontinuado=bool(cat.get("descontinuado", False)),
         )
 
     def re_enriquecer(self) -> None:
@@ -393,6 +394,7 @@ class ServicioStock:
                     orden=cat.get("orden", sku_index.get(item.sku, 0)),
                     linea_id=linea_id,
                     sin_catalogo=False,
+                    descontinuado=bool(cat.get("descontinuado", False)),
                     almacenes=item.almacenes,
                 ))
             else:

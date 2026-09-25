@@ -7,7 +7,7 @@
 
 > API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.5.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)](https://fastapi.tiangolo.com/)
@@ -244,7 +244,7 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 - **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
-Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`
+Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado` (badge "Descontinuado"/"Últimas unidades" en el reporter)
 
 ---
 

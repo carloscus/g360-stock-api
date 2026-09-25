@@ -215,6 +215,7 @@ class CatalogService:
                 "total_skus": len(catalog),
                 "con_ean14": sum(1 for p in catalog.values() if p.get("ean14")),
                 "con_unbx": sum(1 for p in catalog.values() if p.get("un_bx", 1) > 1),
+                "descontinuados": sum(1 for p in catalog.values() if p.get("descontinuado")),
             }
 
     def _guardar_en_disco(self) -> None:

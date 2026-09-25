@@ -308,6 +308,7 @@ class TestDescontinuado:
     @staticmethod
     def _cargar(catalogo):
         from datetime import datetime, timezone
+
         from app.services.catalog_service import catalog_service as cat
         cat._catalog = catalogo
         # Fecha fresca: evita el refresh remoto (sin red en tests)
@@ -364,5 +365,54 @@ class TestDescontinuado:
             datos = respuesta.json()
             assert datos["total_skus"] == 2
             assert datos["descontinuados"] == 1
+        finally:
+            self._limpiar()
+
+
+class TestLineaCodigo:
+    """linea_codigo del catalogo manda sobre el heurístico sku[:2]."""
+
+    @staticmethod
+    def _cargar(catalogo):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = catalogo
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = {}
+        cat._fecha_carga = None
+
+    def test_ficha_sin_stock_prefiere_linea_codigo(self):
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
+                          "linea": "ARCHIVO", "linea_codigo": "78"},
+                "01234": {"sku": "01234", "nombre": "BOLI", "linea": "PELOTAS"},
+            })
+            archivo = servicio_stock._item_desde_catalogo("05001")
+            pelota = servicio_stock._item_desde_catalogo("01234")
+            assert archivo is not None and archivo.linea_id == "78"
+            assert archivo.linea == "ARCHIVO"
+            # Sin linea_codigo: heurístico sku[:2]
+            assert pelota is not None and pelota.linea_id == "01"
+        finally:
+            self._limpiar()
+
+    def test_enriquecer_prefiere_linea_codigo_sin_codigo_reporte(self):
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
+                          "linea": "ARCHIVO", "linea_codigo": "78"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="05001", linea="")])
+            assert items[0].linea_id == "78"
         finally:
             self._limpiar()

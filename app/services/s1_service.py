@@ -187,7 +187,8 @@ class ServicioStock:
         if not cat:
             return None
         linea = cat.get("linea", "").strip()
-        linea_id = _extraer_linea_id(linea) or sku[:2]
+        linea_codigo = cat.get("linea_codigo", "").strip().upper()
+        linea_id = linea_codigo or _extraer_linea_id(linea) or sku[:2]
         return ItemStockEnriched(
             sku=sku.upper(),
             descripcion=cat.get("nombre", ""),
@@ -349,7 +350,7 @@ class ServicioStock:
 
             linea_id = _extraer_linea_id(item.linea)
             if not linea_id and cat:
-                linea_id = item.sku[:2]
+                linea_id = cat.get("linea_codigo", "").strip().upper() or item.sku[:2]
 
             if cat:
                 # Derivar estado_linea de grupo si el catálogo no lo tiene

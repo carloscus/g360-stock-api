@@ -244,7 +244,7 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 - **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
-Campos usados: `sku`, `linea`, `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado` (badge "Descontinuado"/"Últimas unidades" en el reporter)
+Campos usados: `sku`, `linea`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado` (badge "Descontinuado"/"Últimas unidades" en el reporter)
 
 ---
 

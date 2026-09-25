@@ -356,8 +356,8 @@ class TestDescontinuado:
         respuesta = client.post(
             "/api/v1/catalog/upload",
             files={"archivo": ("catalogo_productos.json",
-                               '{"productos": [{"sku": "A", "descontinuado": true},'
-                               ' {"sku": "B"}]}',
+                               ('{"productos": [{"sku": "A", "descontinuado": true},'
+                                ' {"sku": "B"}]}'),
                                "application/json")}
         )
         assert respuesta.status_code == 200

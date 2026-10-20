@@ -416,3 +416,95 @@ class TestLineaCodigo:
             assert items[0].linea_id == "78"
         finally:
             self._limpiar()
+
+
+class TestLineaNombre:
+    """El catalogo publica `linea` como codigo y `linea_nombre` como nombre.
+
+    Antes el catalogo publicaba `linea` = NOMBRE y `linea_codigo` = CODIGO:
+    cada consumidor lo interpretaba distinto y la misma linea aparecia
+    como nombre o como codigo.
+    """
+
+    @staticmethod
+    def _cargar(catalogo, meta=None):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = catalogo
+        cat._meta = meta or {}
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = {}
+        cat._meta = {}
+        cat._fecha_carga = None
+
+    def test_no_duplica_el_nombre_de_linea(self):
+        """Si el XLS ya trae el nombre, no se repite 'ARCHIVO - ARCHIVO'."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
+                          "linea": "78", "linea_nombre": "ARCHIVO",
+                          "linea_codigo": "78"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="05001", linea="ARCHIVO")])
+            assert items[0].linea == "ARCHIVO"
+        finally:
+            self._limpiar()
+
+    def test_completa_codigo_con_nombre_del_catalogo(self):
+        """Si el XLS trae solo el codigo, se agrega el nombre del catalogo."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
+                          "linea": "78", "linea_nombre": "ARCHIVO",
+                          "linea_codigo": "78"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="05001", linea="78")])
+            assert items[0].linea == "78 - ARCHIVO"
+            assert items[0].linea_id == "78"
+        finally:
+            self._limpiar()
+
+    def test_linea_id_usa_la_linea_canonica_del_catalogo(self):
+        """Sin linea_codigo, se usa `linea` (ya es codigo) antes que sku[:2]."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "CA008": {"sku": "CA008", "nombre": "COLORES",
+                          "linea": "77", "linea_nombre": "PINTURA"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CA008", linea="")])
+            # sku[:2] seria "CA" (no es una linea): debe ganar el catalogo
+            assert items[0].linea_id == "77"
+        finally:
+            self._limpiar()
+
+    def test_taxonomia_publicada_en_el_catalogo(self):
+        """La taxonomia viaja en el metadata: no hay que duplicarla."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+        try:
+            self._cargar(
+                {"05001": {"sku": "05001", "nombre": "X", "linea": "78"}},
+                meta={"categorias_por_linea": {"78": "VINIFAN"}},
+            )
+            cliente = TestClient(app)
+            r = cliente.get("/api/v1/catalog")
+            assert r.status_code == 200
+            meta = r.json()["metadata"]
+            assert meta["categorias_por_linea"] == {"78": "VINIFAN"}
+        finally:
+            self._limpiar()

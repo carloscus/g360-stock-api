@@ -21,6 +21,7 @@ class CatalogService:
     def __init__(self):
         self._lock = threading.Lock()
         self._catalog: dict[str, dict] = {}
+        self._meta: dict = {}
         self._fecha_carga: datetime | None = None
         self._ruta_cache = Path(settings.catalogo_ruta)
         # Anti-storm: cooldown tras fallos consecutivos de refresh
@@ -49,6 +50,7 @@ class CatalogService:
                         catalog[sku] = p
 
                 self._catalog = catalog
+                self._meta = payload.get("metadata", {}) or {}
                 if fecha_str:
                     self._fecha_carga = datetime.fromisoformat(fecha_str)
                     if self._fecha_carga.tzinfo is None:
@@ -63,6 +65,21 @@ class CatalogService:
     @property
     def cargado(self) -> bool:
         return bool(self._catalog)
+
+    @property
+    def metadata(self) -> dict:
+        """Metadata del catalogo (incluye la taxonomia publicada)."""
+        return self._meta or {}
+
+    @property
+    def categorias_por_linea(self) -> dict:
+        """Taxonomia linea(codigo) -> categoria, publicada por master-data.
+
+        Evita que cada consumidor mantenga su propia copia (que terminaba
+        contradiciendose entre /stock y /catalog).
+        """
+        mapa = self._meta.get("categorias_por_linea") or {}
+        return {str(k).strip().upper(): str(v).strip().upper() for k, v in mapa.items()}
 
     @property
     def total_skus(self) -> int:
@@ -203,6 +220,7 @@ class CatalogService:
                 if sku:
                     catalog[sku] = p
             self._catalog = catalog
+            self._meta = data.get("metadata", {}) or {}
             self._fecha_carga = datetime.now(timezone.utc)
             self._guardar_en_disco()
             # Re-enriquecer stock items con el nuevo catálogo

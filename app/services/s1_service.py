@@ -350,7 +350,13 @@ class ServicioStock:
 
             linea_id = _extraer_linea_id(item.linea)
             if not linea_id and cat:
-                linea_id = cat.get("linea_codigo", "").strip().upper() or item.sku[:2]
+                # El catalogo publica `linea` como CODIGO canonico: es mas
+                # fiable que asumir que el prefijo del SKU es la linea
+                # (no lo es: 201737 es linea 21, 03117 es linea 78).
+                linea_id = (
+                    cat.get("linea_codigo", "").strip().upper()
+                    or cat.get("linea", "").strip().upper()
+                ) or item.sku[:2]
 
             if cat:
                 # Derivar estado_linea de grupo si el catálogo no lo tiene
@@ -358,6 +364,9 @@ class ServicioStock:
                 if not cat_estado_linea:
                     cat_estado_linea = cat.get("grupo", "").strip()
                 cat_linea = cat.get("linea", "").strip()
+                # `linea_nombre` es el nombre legible: el catalogo publica
+                # `linea` como codigo canonico y el nombre aparte.
+                cat_linea_nombre = (cat.get("linea_nombre", "") or "").strip() or cat_linea
                 cat_grupo = cat.get("grupo", "").strip()
                 cat_tipo = cat.get("tipo", "").strip()
                 cat_familia = cat.get("familia", "").strip()
@@ -368,8 +377,10 @@ class ServicioStock:
                 display_tipo = item.tipo if item.tipo not in _PLACEHOLDERS else ""
                 display_familia = item.familia if item.familia not in _PLACEHOLDERS else ""
                 display_categoria = item.categoria if item.categoria not in _PLACEHOLDERS else ""
-                if display_linea and " - " not in display_linea and cat_linea:
-                    display_linea = f"{display_linea} - {cat_linea}"
+                if display_linea and " - " not in display_linea and cat_linea_nombre:
+                    # No duplicar si el XLS ya traia el nombre.
+                    if display_linea.upper() != cat_linea_nombre.upper():
+                        display_linea = f"{display_linea} - {cat_linea_nombre}"
                 display_grupo = display_grupo or cat_grupo
                 display_tipo = display_tipo or cat_tipo
                 display_familia = display_familia or cat_familia

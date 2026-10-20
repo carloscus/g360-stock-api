@@ -124,6 +124,13 @@ class CatalogoMetadata(BaseModel):
     cargado: bool = Field(False, description="Si el catalogo esta cargado en memoria")
     total_skus: int = Field(0, description="Total de SKUs en el catalogo")
     generated_at: Optional[datetime] = Field(None, description="Momento de la ultima carga del catalogo")
+    categorias_por_linea: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "Taxonomia linea(codigo) -> categoria publicada por master-data. "
+            "Fuente unica: evita que cada consumidor mantenga su propia copia."
+        ),
+    )
 
 
 class CatalogoResponse(BaseModel):

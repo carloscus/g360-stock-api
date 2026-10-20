@@ -491,6 +491,27 @@ class TestLineaNombre:
         finally:
             self._limpiar()
 
+    def test_nombre_de_linea_expuesto(self):
+        """El item del catalogo trae el nombre legible de la linea."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+        try:
+            self._cargar(
+                {"05001": {"sku": "05001", "nombre": "X", "linea": "78",
+                           "linea_nombre": "ARCHIVO"}},
+                meta={"lineas_nombre_a_codigo": {"ARCHIVO": "78"}},
+            )
+            cliente = TestClient(app)
+            r = cliente.get("/api/v1/catalog")
+            assert r.status_code == 200
+            datos = r.json()
+            assert datos["items"][0]["linea"] == "78"
+            assert datos["items"][0]["linea_nombre"] == "ARCHIVO"
+            assert datos["metadata"]["lineas_nombre_a_codigo"] == {"ARCHIVO": "78"}
+        finally:
+            self._limpiar()
+
     def test_taxonomia_publicada_en_el_catalogo(self):
         """La taxonomia viaja en el metadata: no hay que duplicarla."""
         from fastapi.testclient import TestClient

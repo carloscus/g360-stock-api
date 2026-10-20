@@ -82,6 +82,12 @@ class CatalogService:
         return {str(k).strip().upper(): str(v).strip().upper() for k, v in mapa.items()}
 
     @property
+    def lineas_nombre_a_codigo(self) -> dict:
+        """Mapa nombre de linea -> codigo, publicado por master-data."""
+        mapa = self._meta.get("lineas_nombre_a_codigo") or {}
+        return {str(k).strip().upper(): str(v).strip().upper() for k, v in mapa.items()}
+
+    @property
     def total_skus(self) -> int:
         return len(self._catalog)
 

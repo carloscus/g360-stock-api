@@ -85,6 +85,7 @@ def listar_catalogo() -> CatalogoResponse:
             total_skus=len(items),
             generated_at=catalog_service._fecha_carga,
             categorias_por_linea=catalog_service.categorias_por_linea,
+            lineas_nombre_a_codigo=catalog_service.lineas_nombre_a_codigo,
         ),
         items=entries,
     )

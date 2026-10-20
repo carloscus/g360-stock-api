@@ -104,7 +104,8 @@ class CatalogoEntry(BaseModel):
     sku: str = Field(..., description="Codigo unico del producto")
     nombre: str = Field(default="", description="Nombre o descripcion del producto")
     nombre_corto: str = Field(default="", description="Nombre corto generado")
-    linea: str = Field(default="", description="Linea de producto")
+    linea: str = Field(default="", description="Codigo de linea de producto (2 chars)")
+    linea_nombre: str = Field(default="", description="Nombre legible de la linea")
     grupo: str = Field(default="", description="Grupo de producto")
     tipo: str = Field(default="", description="Tipo de producto")
     familia: str = Field(default="", description="Familia de producto")
@@ -130,6 +131,10 @@ class CatalogoMetadata(BaseModel):
             "Taxonomia linea(codigo) -> categoria publicada por master-data. "
             "Fuente unica: evita que cada consumidor mantenga su propia copia."
         ),
+    )
+    lineas_nombre_a_codigo: dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapa nombre de linea -> codigo, publicado por master-data",
     )
 
 

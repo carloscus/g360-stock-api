@@ -359,10 +359,13 @@ class ServicioStock:
                 ) or item.sku[:2]
 
             if cat:
-                # Derivar estado_linea de grupo si el catálogo no lo tiene
+                # estado_linea: SOLO lo que diga el catálogo (guía ERP SKU_BX:
+                # NUEVO / IMPORTADO / TRADICIONAL / NACIONAL).
+                # Antes, si el catálogo no lo tenía, se rellenaba con el GRUPO
+                # del producto: eso metía "TAJADORES" / "RESALTADORES" como si
+                # fueran estados y contaminaba la segmentación por estado.
+                # El grupo tiene su propia columna.
                 cat_estado_linea = cat.get("estado_linea", "").strip()
-                if not cat_estado_linea:
-                    cat_estado_linea = cat.get("grupo", "").strip()
                 cat_linea = cat.get("linea", "").strip()
                 # `linea_nombre` es el nombre legible: el catalogo publica
                 # `linea` como codigo canonico y el nombre aparte.

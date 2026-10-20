@@ -512,6 +512,47 @@ class TestLineaNombre:
         finally:
             self._limpiar()
 
+    def test_estado_linea_no_cae_al_grupo(self):
+        """El GRUPO del producto no es un estado de linea.
+
+        La guia ERP (SKU_BX) define 4 estados: NUEVO, IMPORTADO,
+        TRADICIONAL y NACIONAL. Antes, cuando el catalogo no traia estado,
+        se rellenaba con el grupo y "TAJADORES" / "RESALTADORES" terminaban
+        como estados, ensuciando la segmentacion.
+        """
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79026": {"sku": "79026", "nombre": "TIJERA VINIFAN PANDA",
+                          "linea": "79", "linea_nombre": "ACCESORIOS",
+                          "grupo": "TIJERAS", "categoria": "VINIFAN"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS",
+                           grupo="02 - TIJERAS")])
+            assert items[0].estado_linea == ""
+            # el grupo sigue disponible en su propia columna
+            assert items[0].grupo == "02 - TIJERAS"
+        finally:
+            self._limpiar()
+
+    def test_estado_linea_del_catalogo_se_respeta(self):
+        """Si el catalogo trae estado_linea, ese manda."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79026": {"sku": "79026", "nombre": "TIJERA",
+                          "linea": "79", "estado_linea": "NUEVO",
+                          "grupo": "TIJERAS"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS")])
+            assert items[0].estado_linea == "NUEVO"
+        finally:
+            self._limpiar()
+
     def test_taxonomia_publicada_en_el_catalogo(self):
         """La taxonomia viaja en el metadata: no hay que duplicarla."""
         from fastapi.testclient import TestClient

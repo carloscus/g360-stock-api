@@ -40,35 +40,67 @@ ALMACENES_MKTD: set[str] = {"118"}
 # Para lineas no listadas, se usa PREFIJOS_CATEGORIA_AUTO para inferir.
 # El orden de PREFIJOS_CATEGORIA_AUTO importa: el primer prefijo que
 # coincida gana (se evaluan de mas especifico a menos especifico).
+#
+# ESTA TAXONOMIA DEBE SER IGUAL A LA DE g360-master-data
+# (scripts/generar_catalogo_base.py -> CATEGORIA_POR_LINEA). El catalogo la
+# publica en su metadata y ambos repos se validan cruzadamente con
+# scripts/validar_taxonomia.py. Si divergen, /stock y /catalog clasifican el
+# mismo SKU en categorias distintas.
+#
+# CE y CF (MANUALIDADES y SET) son lineas Crayola: REPRESENTADAS, no VINIFAN.
+# Lo mismo para las lineas propias de cada sub-marca Crayola (CA/CB/CC/CD).
 
 CATEGORIAS: dict[str, list[str]] = {
     "VINIBALL": ["01", "MA", "14", "AD"],
     "VINIFAN": [
-        "02", "09", "11",
-        "72", "73", "75", "76", "77", "78", "79",
-        "CE", "CF",
+        "02",
+        "09",
+        "11",
+        "72",
+        "73",
+        "75",
+        "76",
+        "77",
+        "78",
+        "79",
     ],
     "INDUMENTARIA": ["57", "52"],
-    "REPRESENTADAS": ["85"],
+    "REPRESENTADAS": ["85", "CE", "CF", "CA", "CB", "CC", "CD"],
     "PUBLICIDAD": ["80", "81"],
+    "OTROS": ["99"],
 }
 
 # Prefijos de linea para clasificacion automatica (formato normalizado: sin prefijo '01')
 # (mas especifico primero, menos especifico despues)
+# Misma lista que g360-master-data (PREFIJOS_CATEGORIA_AUTO).
 PREFIJOS_CATEGORIA_AUTO: list[tuple[str, str]] = [
     ("20", "INDUSTRIAL"),
     ("21", "INDUSTRIAL"),
+    ("22", "INDUSTRIAL"),
     ("23", "INDUSTRIAL"),
     ("30", "CIPTECH"),
     ("31", "CIPTECH"),
+    ("32", "CIPTECH"),
     ("33", "CIPTECH"),
+    ("34", "CIPTECH"),
     ("35", "CIPTECH"),
+    ("36", "CIPTECH"),
+    ("37", "CIPTECH"),
+    ("38", "CIPTECH"),
+    ("39", "CIPTECH"),
     ("40", "MATERIALES"),
+    ("41", "MATERIALES"),
     ("50", "MATERIALES"),
+    ("51", "MATERIALES"),
+    ("52", "MATERIALES"),
+    ("53", "MATERIALES"),
+    ("54", "MATERIALES"),
+    ("55", "MATERIALES"),
     ("60", "DESCARTE Y VARIOS"),
     ("65", "DESCARTE Y VARIOS"),
-    ("70", "PRODUCCION"),
     ("98", "DESCARTE Y VARIOS"),
+    ("70", "PRODUCCION"),
+    ("99", "OTROS"),
 ]
 
 CATEGORIA_DEFAULT: str = "OTROS"

@@ -129,6 +129,20 @@ def _nombre_linea(linea: str) -> str:
     return linea.split(" - ", 1)[1].strip().upper()
 
 
+def _linea_display(codigo: str, nombre: str) -> str:
+    """'CB - ESCRITURA' con codigo y nombre, o solo el codigo si no hay nombre.
+
+    Sin esto salia 'CB - CB' cuando el catalogo no trae linea_nombre.
+    """
+    codigo = (codigo or "").strip()
+    nombre = (nombre or "").strip()
+    if not codigo:
+        return ""
+    if not nombre or nombre.upper() == codigo.upper():
+        return codigo
+    return f"{codigo} - {nombre}"
+
+
 def _tipo_almacen(codigo: str) -> str:
     if codigo in ALMACENES_MKTD or codigo.upper().startswith("S"):
         return "mktd"
@@ -394,6 +408,10 @@ class ServicioStock:
             cat = catalog_service.buscar(item.sku)
 
             linea_id = _extraer_linea_id(item.linea)
+            # Codigo de linea tal como viene del reporte S1, antes de que el
+            # catalogo lo sobrescriba: sirve para saber si el display debe
+            # seguir al S1 o al catalogo.
+            linea_id_s1 = linea_id
             # REGLA DE NEGOCIO: SKUs Crayola (C*) tienen lineas propias
             # (CA/CB/CC/CD/CE/CF) que mandan SIEMPRE que S1 no traiga una
             # linea resolvable. Esto protege tanto a SKUs ya catalogados como
@@ -463,15 +481,25 @@ class ServicioStock:
                     # El S1 traia un nombre ambiguo ("79 - ACCESORIOS") y el
                     # catalogo lo desambiguo (p.ej. CD): el display debe reflejar
                     # el codigo corregido, no el del S1.
-                    display_linea = (
-                        f"{linea_id} - {cat_linea_nombre}"
-                        if cat_linea_nombre
-                        else linea_id
-                    )
+                    display_linea = _linea_display(linea_id, cat_linea_nombre)
+                elif cat_linea and linea_id_s1 and cat_linea.upper() != linea_id_s1:
+                    # La linea canonica del catalogo difiere de la del reporte
+                    # (p.ej. CB007 viene de S1 como "76 - ESCRITURA" pero el
+                    # catalogo lo ubica en la linea Crayola "CB"): manda el
+                    # catalogo, que es la misma fuente que usa /catalog. Si no,
+                    # /stock y /catalog mostrarian lineas distintas para el
+                    # mismo SKU.
+                    display_linea = _linea_display(cat_linea, cat_linea_nombre)
                 display_grupo = display_grupo or cat_grupo
                 display_tipo = display_tipo or cat_tipo
                 display_familia = display_familia or cat_familia
-                display_categoria = display_categoria or cat_categoria
+                # La categoria la MANDA el catalogo: es la taxonomia publicada
+                # (metadata.categorias_por_linea) y la que el API usa para
+                # /catalog. Antes ganaba la categoria calculada aca con
+                # constants.py, que estaba desactualizada (CE/CF y las lineas
+                # Crayola seguian como VINIFAN) y hacia que /stock y /catalog
+                # clasificaran el mismo SKU de forma distinta.
+                display_categoria = cat_categoria or display_categoria
 
                 enriched.append(
                     ItemStockEnriched(

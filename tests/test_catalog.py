@@ -915,8 +915,6 @@ class TestLineaAmbiguaRobustez:
         finally:
             self._limpiar()
 
-
-
     def test_crayola_CA_toma_linea_del_catalogo(self):
         """CA001 viene de S1 como '77 - PINTURA' pero el catalogo dice CA."""
         from app.models.schemas import ItemStock
@@ -1165,7 +1163,6 @@ class TestLineaAmbiguaRobustez:
         finally:
             self._limpiar()
 
-
     def test_linea_ambigua_con_grupo_distinto_sigue_la_regla(self):
         """El desambiguado no depende del grupo en stock-api: confia en catalogo."""
         from app.models.schemas import ItemStock
@@ -1188,5 +1185,142 @@ class TestLineaAmbiguaRobustez:
                 [ItemStock(sku="79102", linea="79 - ACCESORIOS")]
             )
             assert items[0].linea_id == "79"
+        finally:
+            self._limpiar()
+
+
+class TestStockYCatalogoNoSeContradicen:
+    """El flujo REAL del reporte: transform -> enriquecer.
+
+    Los tests anteriores armaban el ItemStock a mano (sin categoria), asi que
+    no cubrian el caso real: el reporte de S1 calcula la categoria con
+    constants.py y esa categoria ganaba sobre la del catalogo. Con eso
+    /stock decia VINIFAN para un Crayola de linea 76 mientras /catalog decia
+    REPRESENTADAS. Estos tests pasan por _transformar_items, que es el camino
+    que recorre el stock de verdad.
+    """
+
+    @staticmethod
+    def _cargar(catalogo, meta=None):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+
+        cat._catalog = catalogo
+        cat._meta = meta or {}
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+
+        cat._catalog = {}
+        cat._meta = {}
+        cat._fecha_carga = None
+
+    @staticmethod
+    def _flujo_completo(sku, linea_s1, catalogo):
+        """Reproduce: datos del reporte -> _transformar_items -> enriquecer."""
+        from app.services.s1_service import servicio_stock
+
+        datos = {
+            "VES": {
+                sku: {
+                    "descripcion": f"PRODUCTO {sku}",
+                    "um": "UND",
+                    "linea": linea_s1,
+                    "grupo": "GRUPO",
+                    "tipo": "TIPO",
+                    "familia": "FAMILIA",
+                    "stock": 5,
+                    "predespacho": 0,
+                }
+            }
+        }
+        items = servicio_stock._transformar_items(datos)
+        return servicio_stock._enriquecer_items(items)
+
+    def test_crayola_en_linea_72_queda_representadas(self):
+        """CC001 viene de S1 como '72 - PEGAMENTOS' (categoria VINIFAN local)."""
+        try:
+            self._cargar(
+                {
+                    "CC001": {
+                        "sku": "CC001",
+                        "nombre": "CRAYOLA GOMA ESCARCHADA",
+                        "linea": "CC",
+                        "linea_codigo": "CC",
+                        "linea_nombre": "PEGAMENTOS",
+                        "grupo": "GOMA ESCARCHADA",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = self._flujo_completo("CC001", "72 - PEGAMENTOS", None)
+            assert items[0].categoria == "REPRESENTADAS"
+            assert items[0].linea_id == "CC"
+            assert items[0].linea.startswith("CC")
+        finally:
+            self._limpiar()
+
+    def test_crayola_en_linea_76_queda_representadas(self):
+        """CB001 viene de S1 como '76 - ESCRITURA'."""
+        try:
+            self._cargar(
+                {
+                    "CB001": {
+                        "sku": "CB001",
+                        "nombre": "CRAYOLA RESALTADOR",
+                        "linea": "CB",
+                        "linea_codigo": "CB",
+                        "linea_nombre": "ESCRITURA",
+                        "grupo": "RESALTADOR",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = self._flujo_completo("CB001", "76 - ESCRITURA", None)
+            assert items[0].categoria == "REPRESENTADAS"
+            assert items[0].linea_id == "CB"
+        finally:
+            self._limpiar()
+
+    def test_linea_ce_ya_no_es_vinifan(self):
+        """CE (MANUALIDADES) es 100% Crayola: la taxonomia local lo refleja."""
+        from app.core.constants import asignar_categoria
+
+        assert asignar_categoria("CE") == "REPRESENTADAS"
+        assert asignar_categoria("CF") == "REPRESENTADAS"
+        assert asignar_categoria("CA") == "REPRESENTADAS"
+
+    def test_categoria_del_catalogo_manda_sobre_la_local(self):
+        """Si el catalogo dice otra cosa, manda el catalogo."""
+        try:
+            self._cargar(
+                {
+                    "X001": {
+                        "sku": "X001",
+                        "nombre": "PRODUCTO",
+                        "linea": "78",
+                        "linea_codigo": "78",
+                        "linea_nombre": "ARCHIVO",
+                        "grupo": "G",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = self._flujo_completo("X001", "78 - ARCHIVO", None)
+            # El catalogo (REPRESENTADAS) gana al calculo local (VINIFAN).
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_sku_sin_catalogo_conserva_la_categoria_local(self):
+        """Sin catalogo, el API sigue clasificando con su propia taxonomia."""
+        try:
+            self._cargar({})
+            items = self._flujo_completo("X002", "78 - ARCHIVO", None)
+            assert items[0].categoria == "VINIFAN"
+            assert items[0].sin_catalogo is True
         finally:
             self._limpiar()

@@ -915,6 +915,257 @@ class TestLineaAmbiguaRobustez:
         finally:
             self._limpiar()
 
+
+
+    def test_crayola_CA_toma_linea_del_catalogo(self):
+        """CA001 viene de S1 como '77 - PINTURA' pero el catalogo dice CA."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "CA001": {
+                        "sku": "CA001",
+                        "nombre": "CRAYOLA CRAYONES DELGADOS",
+                        "linea": "CA",
+                        "linea_codigo": "CA",
+                        "linea_nombre": "PINTURA",
+                        "grupo": "CRAYONES",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CA001", linea="77 - PINTURA", grupo="CRAYONES")]
+            )
+            assert items[0].linea_id == "CA"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_crayola_CB_toma_linea_del_catalogo(self):
+        """CB007 viene de S1 como '76 - ESCRITURA' pero el catalogo dice CB."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "CB007": {
+                        "sku": "CB007",
+                        "nombre": "CRAYOLA BOLIGRAFOS",
+                        "linea": "CB",
+                        "linea_codigo": "CB",
+                        "linea_nombre": "ESCRITURA",
+                        "grupo": "BOLIGRAFOS",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CB007", linea="76 - ESCRITURA", grupo="BOLIGRAFOS")]
+            )
+            assert items[0].linea_id == "CB"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_crayola_CC_toma_linea_del_catalogo(self):
+        """CC001 viene de S1 como 'PEGAMENTOS' pero el catalogo dice CC."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "CC001": {
+                        "sku": "CC001",
+                        "nombre": "CRAYOLA GOMA ESCARCHADA",
+                        "linea": "CC",
+                        "linea_codigo": "CC",
+                        "linea_nombre": "PEGAMENTOS",
+                        "grupo": "GOMA ESCARCHADA",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CC001", linea="PEGAMENTOS", grupo="GOMA ESCARCHADA")]
+            )
+            assert items[0].linea_id == "CC"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_crayola_CE_toma_linea_del_catalogo(self):
+        """CE001 viene de S1 como 'MANUALIDADES' pero el catalogo dice CE."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "CE001": {
+                        "sku": "CE001",
+                        "nombre": "CRAYOLA TIZAS JUMBO",
+                        "linea": "CE",
+                        "linea_codigo": "CE",
+                        "linea_nombre": "MANUALIDADES",
+                        "grupo": "TIZAS",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CE001", linea="MANUALIDADES", grupo="TIZAS")]
+            )
+            assert items[0].linea_id == "CE"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_crayola_CF_toma_linea_del_catalogo(self):
+        """CF005 viene de S1 como 'SET' pero el catalogo dice CF."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "CF005": {
+                        "sku": "CF005",
+                        "nombre": "CRAYOLA SET DE PINTURA",
+                        "linea": "CF",
+                        "linea_codigo": "CF",
+                        "linea_nombre": "SET",
+                        "grupo": "SET",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CF005", linea="SET", grupo="SET")]
+            )
+            assert items[0].linea_id == "CF"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_vinifan_no_se_ve_afectado_por_fix_crayola(self):
+        """79102 es VINIFAN y no debe cambiar aRepresentadas."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "79102": {
+                        "sku": "79102",
+                        "nombre": "BORRADOR BLANCO CHICO VINIFAN",
+                        "linea": "79",
+                        "linea_codigo": "79",
+                        "linea_nombre": "ACCESORIOS",
+                        "grupo": "BORRADOR",
+                        "categoria": "VINIFAN",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79102", linea="79 - ACCESORIOS", grupo="BORRADOR")]
+            )
+            assert items[0].linea_id == "79"
+            assert items[0].categoria == "VINIFAN"
+        finally:
+            self._limpiar()
+
+    def test_viniball_no_se_ve_afectado_por_fix_crayola(self):
+        """011019 es VINIBALL y no debe cambiar."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "011019": {
+                        "sku": "011019",
+                        "nombre": "SEMIDEPORTIVA FUTBOL CRACKCITO",
+                        "linea": "01",
+                        "linea_codigo": "01",
+                        "linea_nombre": "PELOTAS",
+                        "grupo": "NACIONAL",
+                        "categoria": "VINIBALL",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="011019", linea="01 - PELOTAS", grupo="NACIONAL")]
+            )
+            assert items[0].linea_id == "01"
+            assert items[0].categoria == "VINIBALL"
+        finally:
+            self._limpiar()
+
+    def test_linea_85_no_se_ve_afectada_por_fix_crayola(self):
+        """85007 es REPRESENTADAS de linea 85 y no debe cambiar."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar(
+                {
+                    "85007": {
+                        "sku": "85007",
+                        "nombre": "LIGAS #18 X 1/4LBS-NT-ALLEANZA",
+                        "linea": "85",
+                        "linea_codigo": "85",
+                        "linea_nombre": "REPRESENTADAS",
+                        "grupo": "OLFA",
+                        "categoria": "REPRESENTADAS",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="85007", linea="85 - REPRESENTADAS", grupo="OLFA")]
+            )
+            assert items[0].linea_id == "85"
+            assert items[0].categoria == "REPRESENTADAS"
+        finally:
+            self._limpiar()
+
+    def test_sku_nuevo_C_sin_catalogo_usa_prefijo(self):
+        """SKU nuevo que empieza con C y no esta en catalogo usa prefijo."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            self._cargar({})  # Catálogo vacío
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CA087", linea="77 - PINTURA", grupo="CRAYONES")]
+            )
+            # Con el fallback C*, debe usar CA
+            assert items[0].linea_id == "CA"
+        finally:
+            self._limpiar()
+
+    def test_sku_falso_positivo_C_no_es_Crayola(self):
+        """SKU CIPSA interno que empieza con C pero no es Crayola."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+
+        try:
+            # Simular que CC09150 NO está en catálogo
+            self._cargar({})
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CC09150", linea="72 - PEGAMENTOS", grupo="ETIQUETAS")]
+            )
+            # No tiene catálogo, no es Crayola reconocido (no tiene patrón),
+            # debe caer al fallback: prefijo CC
+            assert items[0].linea_id == "CC"
+        finally:
+            self._limpiar()
+
+
     def test_linea_ambigua_con_grupo_distinto_sigue_la_regla(self):
         """El desambiguado no depende del grupo en stock-api: confia en catalogo."""
         from app.models.schemas import ItemStock

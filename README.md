@@ -238,6 +238,16 @@ Después de 5 min:
 ## Catálogo maestro
 
 Cargado desde `g360-master-data` (JSON en GitHub):
+
+> **Desambiguación de líneas:** cuando el ERP trae un nombre de línea que
+> designa a más de una línea (ej. `ACCESORIOS` = líneas 79 y CD), el API
+> confía en el `linea_codigo` publicado por el catálogo, NO resuelve por nombre.
+> El catálogo expone `categorias_por_linea` y `lineas_grupo_a_codigo` en su
+> metadata para que los consumidores no dupliquen la lógica.
+>
+> **Líneas Crayola:** los SKUs con prefijo `C` (CA/CB/CC/CD/CE/CF) viven en
+> líneas propias dentro de REPRESENTADAS; las líneas ERP genéricas (72, 76, 77,
+> 79) quedan 100% VINIFAN sin contaminación cruzada.
 - **`/api/v1/upload/catalog`** — subir archivo JSON manualmente
 - **Auto-carga** — al iniciar, si no hay catálogo en disco, descarga desde GitHub
 - **Auto-refresh** — cuando TTL expira (6h), refresca automáticamente desde GitHub (cooldown anti-storm: tras 2 fallos consecutivos espera 5 min sin reintentar; la lectura nunca se bloquea por la red)

@@ -394,6 +394,18 @@ class ServicioStock:
             cat = catalog_service.buscar(item.sku)
 
             linea_id = _extraer_linea_id(item.linea)
+            # REGLA DE NEGOCIO: SKUs Crayola (C*) tienen lineas propias
+            # (CA/CB/CC/CD/CE/CF) que mandan SIEMPRE que S1 no traiga una
+            # linea resolvable. Esto protege tanto a SKUs ya catalogados como
+            # a los nuevos que aun no han sido agregados al master-data.
+            # NO aplica si S1 ya resolvio la linea correctamente (ej: CA001
+            # viene de S1 como "CA - PINTURA" -> linea_id="CA" -> no sobreescribir).
+            if (
+                (not linea_id or linea_id in ("77", "76", "72", "79"))
+                and item.sku.upper().startswith("C")
+                and len(item.sku) >= 2
+            ):
+                linea_id = item.sku[:2].upper()
             # Un NOMBRE de linea ambiguo ("ACCESORIOS" = 79 y CD) no resuelve
             # la linea por si solo: si el S1 lo trae, manda el catalogo, que
             # ya la desambigua por grupo (pinceles Crayola -> CD). Sin esto,

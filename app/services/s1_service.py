@@ -143,6 +143,23 @@ def _linea_display(codigo: str, nombre: str) -> str:
     return f"{codigo} - {nombre}"
 
 
+def _categoria_de_item(sku: str, linea: str) -> str:
+    """Categoria de un item del reporte de stock.
+
+    La MARCA manda sobre la linea, misma regla que g360-master-data
+    (categoria_de_producto): todo SKU C* es Crayola -> REPRESENTADAS.
+
+    Importa que aplique TAMBIEN cuando el SKU todavia no esta en el
+    catalogo (lo acaba de entrar al ERP y el catalogo aun no se
+    regenero): si no, un Crayola nuevo reported en una linea generica
+    (72/76/77/79) salia como VINIFAN y en una sub-marca nueva (CG) como
+    OTROS, que es justo el ruido que la regla busca evitar.
+    """
+    if str(sku or "").strip().upper().startswith("C"):
+        return "REPRESENTADAS"
+    return asignar_categoria(linea)
+
+
 def _tipo_almacen(codigo: str) -> str:
     if codigo in ALMACENES_MKTD or codigo.upper().startswith("S"):
         return "mktd"
@@ -805,7 +822,7 @@ class ServicioStock:
                         "grupo": info.get("grupo", ""),
                         "tipo": info.get("tipo", ""),
                         "familia": info.get("familia", ""),
-                        "categoria": asignar_categoria(linea_norm),
+                        "categoria": _categoria_de_item(sku, linea_norm),
                         "almacenes": {},
                     }
                 skus_unicos[sku]["almacenes"][almacen] = {

@@ -1324,3 +1324,29 @@ class TestStockYCatalogoNoSeContradicen:
             assert items[0].sin_catalogo is True
         finally:
             self._limpiar()
+
+    def test_crayola_sin_catalogo_no_sale_vinifan(self):
+        """Un C* que aun no esta en el catalogo sigue siendo REPRESENTADAS.
+
+        Es la ventana dangerous: el Crayola entra al ERP, el catalogo aun no
+        se regenero y el reporte lo trae en una linea generica (76). Si la
+        marca no mandara, /stock lo reportaria como VINIFAN, que es
+        exactamente el ruido que la regla busca evitar.
+        """
+        try:
+            self._cargar({})
+            items = self._flujo_completo("CB999", "76 - ESCRITURA", None)
+            assert items[0].categoria == "REPRESENTADAS"
+            assert items[0].linea_id == "CB"
+        finally:
+            self._limpiar()
+
+    def test_sub_marca_crayola_nueva_sin_catalogo(self):
+        """Una sub-marca Crayola nueva (CG) tampoco cae en OTROS."""
+        try:
+            self._cargar({})
+            items = self._flujo_completo("CG500", "77 - PINTURA", None)
+            assert items[0].categoria == "REPRESENTADAS"
+            assert items[0].linea_id == "CG"
+        finally:
+            self._limpiar()

@@ -1,4 +1,5 @@
 """Tests para el endpoint de catalogo (upload + health)."""
+
 from __future__ import annotations
 
 import json
@@ -11,7 +12,12 @@ from app.main import app
 from app.services.catalog_service import catalog_service
 
 client = TestClient(app)
-RUTA_CATALOGO = Path(__file__).parent.parent.parent / "g360-master-data" / "output" / "catalogo_productos.json"
+RUTA_CATALOGO = (
+    Path(__file__).parent.parent.parent
+    / "g360-master-data"
+    / "output"
+    / "catalogo_productos.json"
+)
 
 
 class TestCatalogHealth:
@@ -76,9 +82,24 @@ class TestCatalogList:
         items = datos["items"]
         assert len(items) == total
 
-        required = {"sku", "nombre", "linea", "grupo", "tipo", "familia", "categoria",
-                    "estado_linea", "un_bx", "peso_kg", "precio", "ean13", "ean14",
-                    "keywords", "orden", "descontinuado"}
+        required = {
+            "sku",
+            "nombre",
+            "linea",
+            "grupo",
+            "tipo",
+            "familia",
+            "categoria",
+            "estado_linea",
+            "un_bx",
+            "peso_kg",
+            "precio",
+            "ean13",
+            "ean14",
+            "keywords",
+            "orden",
+            "descontinuado",
+        }
         assert required.issubset(set(items[0].keys()))
         assert all("almacenes" not in it for it in items)
 
@@ -98,7 +119,7 @@ class TestCatalogUpload:
     def test_upload_archivo_no_json(self):
         respuesta = client.post(
             "/api/v1/catalog/upload",
-            files={"archivo": ("test.txt", b"hello", "text/plain")}
+            files={"archivo": ("test.txt", b"hello", "text/plain")},
         )
         assert respuesta.status_code == 400
         assert "Formato no soportado" in respuesta.json()["detail"]
@@ -110,7 +131,9 @@ class TestCatalogUpload:
 
         respuesta = client.post(
             "/api/v1/catalog/upload",
-            files={"archivo": ("catalogo_productos.json", contenido, "application/json")}
+            files={
+                "archivo": ("catalogo_productos.json", contenido, "application/json")
+            },
         )
         assert respuesta.status_code == 200
         datos = respuesta.json()
@@ -135,6 +158,7 @@ class TestCatalogUpload:
 
         # Usar datos en cache (general o sucursales)
         from app.services.s1_service import servicio_stock
+
         if not servicio_stock._items_general:
             servicio_stock._actualizar_desde_origen("general")
 
@@ -162,12 +186,14 @@ class TestCatalogUpload:
     def test_sku_con_enrich(self):
         """Verificar que /stock/{sku} retorna campos del catalogo cuando esta cargado."""
         import json as _json
+
         with open(RUTA_CATALOGO, encoding="utf-8") as f:
             data = _json.load(f)
         catalog_service.cargar_desde_json(data)
 
         # Cargar stock de prueba
         from app.services.s1_service import servicio_stock
+
         sample = Path(__file__).parent / "samples" / "REPT_STOCK_SAMPLE.xls"
         if sample.exists():
             servicio_stock.procesar_archivo_local(str(sample))
@@ -194,8 +220,20 @@ class TestCargarDesdeUrl:
 
         payload = {
             "productos": [
-                {"sku": "011019", "un_bx": 60, "peso_kg": 0.2, "precio": 9.16, "estado_linea": "NACIONAL"},
-                {"sku": "011028", "un_bx": 12, "peso_kg": 0.3, "precio": 11.5, "estado_linea": "NACIONAL"},
+                {
+                    "sku": "011019",
+                    "un_bx": 60,
+                    "peso_kg": 0.2,
+                    "precio": 9.16,
+                    "estado_linea": "NACIONAL",
+                },
+                {
+                    "sku": "011028",
+                    "un_bx": 12,
+                    "peso_kg": 0.3,
+                    "precio": 11.5,
+                    "estado_linea": "NACIONAL",
+                },
             ]
         }
 
@@ -215,7 +253,9 @@ class TestCargarDesdeUrl:
         catalog_service._catalog = {}
         catalog_service._fecha_carga = None
 
-        resultado = catalog_service.cargar_desde_url("https://example.com/catalogo_productos.json")
+        resultado = catalog_service.cargar_desde_url(
+            "https://example.com/catalogo_productos.json"
+        )
         assert resultado["ok"] is True
         assert resultado["total_skus"] == 2
         assert catalog_service.cargado
@@ -240,7 +280,9 @@ class TestCargarDesdeUrl:
         catalog_service._catalog = {}
         catalog_service._fecha_carga = None
 
-        resultado = catalog_service.cargar_desde_url("https://example.com/catalogo_productos.json")
+        resultado = catalog_service.cargar_desde_url(
+            "https://example.com/catalogo_productos.json"
+        )
         assert resultado["ok"] is False
         assert "error" in resultado
         assert not catalog_service.cargado
@@ -253,14 +295,26 @@ class TestSkuSinStock:
         from app.services.catalog_service import catalog_service as cat
         from app.services.s1_service import servicio_stock
 
-        cat._catalog = {"76250": {
-            "sku": "76250", "nombre": "BOLIGRAFO VINIFAN TRIFAN 32 M NEGRO DISPLAY X50",
-            "un_bx": 28, "precio": 17.77, "linea": "ESCRITURA",
-            "grupo": "BOLIGRAFO", "tipo": "DISPLAY", "familia": "TINTA SECA",
-            "categoria": "VINIFAN", "ean13": "7754807762502", "ean14": "17754807762509",
-            "keywords": [], "orden": 588, "estado_linea": "NUEVO", "peso_kg": 0.0,
-            "nombre_corto": "Boligrafo Trifan 32 M Negro Display X50",
-        }}
+        cat._catalog = {
+            "76250": {
+                "sku": "76250",
+                "nombre": "BOLIGRAFO VINIFAN TRIFAN 32 M NEGRO DISPLAY X50",
+                "un_bx": 28,
+                "precio": 17.77,
+                "linea": "ESCRITURA",
+                "grupo": "BOLIGRAFO",
+                "tipo": "DISPLAY",
+                "familia": "TINTA SECA",
+                "categoria": "VINIFAN",
+                "ean13": "7754807762502",
+                "ean14": "17754807762509",
+                "keywords": [],
+                "orden": 588,
+                "estado_linea": "NUEVO",
+                "peso_kg": 0.0,
+                "nombre_corto": "Boligrafo Trifan 32 M Negro Display X50",
+            }
+        }
         cat._fecha_carga = None
         # Vaciar stock para que el fallback sea el unico camino
         servicio_stock._items_general = []
@@ -310,6 +364,7 @@ class TestDescontinuado:
         from datetime import datetime, timezone
 
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = catalogo
         # Fecha fresca: evita el refresh remoto (sin red en tests)
         cat._fecha_carga = datetime.now(timezone.utc)
@@ -317,19 +372,36 @@ class TestDescontinuado:
     @staticmethod
     def _limpiar():
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = {}
         cat._fecha_carga = None
 
     def test_enrich_propaga_marcador(self):
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79050": {"sku": "79050", "nombre": "TIJERA", "descontinuado": True},
-                "011019": {"sku": "011019", "nombre": "PELOTA", "descontinuado": False},
-            })
+            self._cargar(
+                {
+                    "79050": {
+                        "sku": "79050",
+                        "nombre": "TIJERA",
+                        "descontinuado": True,
+                    },
+                    "011019": {
+                        "sku": "011019",
+                        "nombre": "PELOTA",
+                        "descontinuado": False,
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="79050"), ItemStock(sku="011019"), ItemStock(sku="NADIE")])
+                [
+                    ItemStock(sku="79050"),
+                    ItemStock(sku="011019"),
+                    ItemStock(sku="NADIE"),
+                ]
+            )
             por_sku = {i.sku: i for i in items}
             assert por_sku["79050"].descontinuado is True
             assert por_sku["011019"].descontinuado is False
@@ -341,10 +413,17 @@ class TestDescontinuado:
 
     def test_ficha_sin_stock_propaga_marcador(self):
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79050": {"sku": "79050", "nombre": "TIJERA", "descontinuado": True},
-            })
+            self._cargar(
+                {
+                    "79050": {
+                        "sku": "79050",
+                        "nombre": "TIJERA",
+                        "descontinuado": True,
+                    },
+                }
+            )
             item = servicio_stock._item_desde_catalogo("79050")
             assert item is not None
             assert item.sin_stock is True
@@ -355,10 +434,16 @@ class TestDescontinuado:
     def test_upload_cuenta_descontinuados(self):
         respuesta = client.post(
             "/api/v1/catalog/upload",
-            files={"archivo": ("catalogo_productos.json",
-                               ('{"productos": [{"sku": "A", "descontinuado": true},'
-                                ' {"sku": "B"}]}'),
-                               "application/json")}
+            files={
+                "archivo": (
+                    "catalogo_productos.json",
+                    (
+                        '{"productos": [{"sku": "A", "descontinuado": true},'
+                        ' {"sku": "B"}]}'
+                    ),
+                    "application/json",
+                )
+            },
         )
         assert respuesta.status_code == 200
         try:
@@ -377,23 +462,32 @@ class TestLineaCodigo:
         from datetime import datetime, timezone
 
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = catalogo
         cat._fecha_carga = datetime.now(timezone.utc)
 
     @staticmethod
     def _limpiar():
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = {}
         cat._fecha_carga = None
 
     def test_ficha_sin_stock_prefiere_linea_codigo(self):
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
-                          "linea": "ARCHIVO", "linea_codigo": "78"},
-                "01234": {"sku": "01234", "nombre": "BOLI", "linea": "PELOTAS"},
-            })
+            self._cargar(
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "ARCHIVO A4",
+                        "linea": "ARCHIVO",
+                        "linea_codigo": "78",
+                    },
+                    "01234": {"sku": "01234", "nombre": "BOLI", "linea": "PELOTAS"},
+                }
+            )
             archivo = servicio_stock._item_desde_catalogo("05001")
             pelota = servicio_stock._item_desde_catalogo("01234")
             assert archivo is not None and archivo.linea_id == "78"
@@ -406,13 +500,19 @@ class TestLineaCodigo:
     def test_enriquecer_prefiere_linea_codigo_sin_codigo_reporte(self):
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
-                          "linea": "ARCHIVO", "linea_codigo": "78"},
-            })
-            items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="05001", linea="")])
+            self._cargar(
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "ARCHIVO A4",
+                        "linea": "ARCHIVO",
+                        "linea_codigo": "78",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items([ItemStock(sku="05001", linea="")])
             assert items[0].linea_id == "78"
         finally:
             self._limpiar()
@@ -431,6 +531,7 @@ class TestLineaNombre:
         from datetime import datetime, timezone
 
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = catalogo
         cat._meta = meta or {}
         cat._fecha_carga = datetime.now(timezone.utc)
@@ -438,6 +539,7 @@ class TestLineaNombre:
     @staticmethod
     def _limpiar():
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = {}
         cat._meta = {}
         cat._fecha_carga = None
@@ -446,14 +548,22 @@ class TestLineaNombre:
         """Si el XLS ya trae el nombre, no se repite 'ARCHIVO - ARCHIVO'."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
-                          "linea": "78", "linea_nombre": "ARCHIVO",
-                          "linea_codigo": "78"},
-            })
+            self._cargar(
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "ARCHIVO A4",
+                        "linea": "78",
+                        "linea_nombre": "ARCHIVO",
+                        "linea_codigo": "78",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="05001", linea="ARCHIVO")])
+                [ItemStock(sku="05001", linea="ARCHIVO")]
+            )
             assert items[0].linea == "ARCHIVO"
         finally:
             self._limpiar()
@@ -462,14 +572,22 @@ class TestLineaNombre:
         """Si el XLS trae solo el codigo, se agrega el nombre del catalogo."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
-                          "linea": "78", "linea_nombre": "ARCHIVO",
-                          "linea_codigo": "78"},
-            })
+            self._cargar(
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "ARCHIVO A4",
+                        "linea": "78",
+                        "linea_nombre": "ARCHIVO",
+                        "linea_codigo": "78",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="05001", linea="78")])
+                [ItemStock(sku="05001", linea="78")]
+            )
             assert items[0].linea == "78 - ARCHIVO"
             assert items[0].linea_id == "78"
         finally:
@@ -479,13 +597,19 @@ class TestLineaNombre:
         """Sin linea_codigo, se usa `linea` (ya es codigo) antes que sku[:2]."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "CA008": {"sku": "CA008", "nombre": "COLORES",
-                          "linea": "77", "linea_nombre": "PINTURA"},
-            })
-            items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="CA008", linea="")])
+            self._cargar(
+                {
+                    "CA008": {
+                        "sku": "CA008",
+                        "nombre": "COLORES",
+                        "linea": "77",
+                        "linea_nombre": "PINTURA",
+                    },
+                }
+            )
+            items = servicio_stock._enriquecer_items([ItemStock(sku="CA008", linea="")])
             # sku[:2] seria "CA" (no es una linea): debe ganar el catalogo
             assert items[0].linea_id == "77"
         finally:
@@ -496,10 +620,17 @@ class TestLineaNombre:
         from fastapi.testclient import TestClient
 
         from app.main import app
+
         try:
             self._cargar(
-                {"05001": {"sku": "05001", "nombre": "X", "linea": "78",
-                           "linea_nombre": "ARCHIVO"}},
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "X",
+                        "linea": "78",
+                        "linea_nombre": "ARCHIVO",
+                    }
+                },
                 meta={"lineas_nombre_a_codigo": {"ARCHIVO": "78"}},
             )
             cliente = TestClient(app)
@@ -522,15 +653,23 @@ class TestLineaNombre:
         """
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79026": {"sku": "79026", "nombre": "TIJERA VINIFAN PANDA",
-                          "linea": "79", "linea_nombre": "ACCESORIOS",
-                          "grupo": "TIJERAS", "categoria": "VINIFAN"},
-            })
+            self._cargar(
+                {
+                    "79026": {
+                        "sku": "79026",
+                        "nombre": "TIJERA VINIFAN PANDA",
+                        "linea": "79",
+                        "linea_nombre": "ACCESORIOS",
+                        "grupo": "TIJERAS",
+                        "categoria": "VINIFAN",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="79026", linea="79 - ACCESORIOS",
-                           grupo="02 - TIJERAS")])
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS", grupo="02 - TIJERAS")]
+            )
             assert items[0].estado_linea == ""
             # el grupo sigue disponible en su propia columna
             assert items[0].grupo == "02 - TIJERAS"
@@ -541,14 +680,22 @@ class TestLineaNombre:
         """Si el catalogo trae estado_linea, ese manda."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79026": {"sku": "79026", "nombre": "TIJERA",
-                          "linea": "79", "estado_linea": "NUEVO",
-                          "grupo": "TIJERAS"},
-            })
+            self._cargar(
+                {
+                    "79026": {
+                        "sku": "79026",
+                        "nombre": "TIJERA",
+                        "linea": "79",
+                        "estado_linea": "NUEVO",
+                        "grupo": "TIJERAS",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="79026", linea="79 - ACCESORIOS")])
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS")]
+            )
             assert items[0].estado_linea == "NUEVO"
         finally:
             self._limpiar()
@@ -558,6 +705,7 @@ class TestLineaNombre:
         from fastapi.testclient import TestClient
 
         from app.main import app
+
         try:
             self._cargar(
                 {"05001": {"sku": "05001", "nombre": "X", "linea": "78"}},
@@ -585,6 +733,7 @@ class TestLineaAmbiguaMandaCatalogo:
         from datetime import datetime, timezone
 
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = catalogo
         cat._meta = meta or {}
         cat._fecha_carga = datetime.now(timezone.utc)
@@ -592,6 +741,7 @@ class TestLineaAmbiguaMandaCatalogo:
     @staticmethod
     def _limpiar():
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = {}
         cat._meta = {}
         cat._fecha_carga = None
@@ -600,14 +750,23 @@ class TestLineaAmbiguaMandaCatalogo:
         """El S1 dice '79 - ACCESORIOS' pero el catalogo dice CD: gana CD."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "CD001": {"sku": "CD001", "nombre": "CRAYOLA PINCELES",
-                          "linea": "CD", "linea_codigo": "CD",
-                          "linea_nombre": "ACCESORIOS", "grupo": "PINCELES"},
-            })
+            self._cargar(
+                {
+                    "CD001": {
+                        "sku": "CD001",
+                        "nombre": "CRAYOLA PINCELES",
+                        "linea": "CD",
+                        "linea_codigo": "CD",
+                        "linea_nombre": "ACCESORIOS",
+                        "grupo": "PINCELES",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")]
+            )
             assert items[0].linea_id == "CD"
             assert items[0].linea == "CD - ACCESORIOS"
         finally:
@@ -617,14 +776,23 @@ class TestLineaAmbiguaMandaCatalogo:
         """El S1 dice '79 - ACCESORIOS' y el catalogo tambien: sigue 79."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79026": {"sku": "79026", "nombre": "TIJERA VINIFAN PANDA",
-                          "linea": "79", "linea_codigo": "79",
-                          "linea_nombre": "ACCESORIOS", "grupo": "TIJERAS"},
-            })
+            self._cargar(
+                {
+                    "79026": {
+                        "sku": "79026",
+                        "nombre": "TIJERA VINIFAN PANDA",
+                        "linea": "79",
+                        "linea_codigo": "79",
+                        "linea_nombre": "ACCESORIOS",
+                        "grupo": "TIJERAS",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="79026", linea="79 - ACCESORIOS")])
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS")]
+            )
             assert items[0].linea_id == "79"
             assert items[0].linea == "79 - ACCESORIOS"
         finally:
@@ -634,14 +802,22 @@ class TestLineaAmbiguaMandaCatalogo:
         """Un nombre NO ambiguo no se toca: el S1 manda."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
-                          "linea": "78", "linea_codigo": "78",
-                          "linea_nombre": "ARCHIVO"},
-            })
+            self._cargar(
+                {
+                    "05001": {
+                        "sku": "05001",
+                        "nombre": "ARCHIVO A4",
+                        "linea": "78",
+                        "linea_codigo": "78",
+                        "linea_nombre": "ARCHIVO",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="05001", linea="78 - ARCHIVO")])
+                [ItemStock(sku="05001", linea="78 - ARCHIVO")]
+            )
             assert items[0].linea_id == "78"
         finally:
             self._limpiar()
@@ -650,11 +826,15 @@ class TestLineaAmbiguaMandaCatalogo:
         """Sin catalogo no hay desambiguacion posible: se conserva el S1."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
             self._cargar({})
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
-            assert items[0].linea_id == "79"
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")]
+            )
+            # Sin catalogo: el nombre ambiguo no puede resolverse,
+            # se conserva el sufijo del SKU ("CD") como fallback
+            assert items[0].linea_id == "CD"
         finally:
             self._limpiar()
 
@@ -672,6 +852,7 @@ class TestLineaAmbiguaRobustez:
         from datetime import datetime, timezone
 
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = catalogo
         cat._meta = meta or {}
         cat._fecha_carga = datetime.now(timezone.utc)
@@ -679,6 +860,7 @@ class TestLineaAmbiguaRobustez:
     @staticmethod
     def _limpiar():
         from app.services.catalog_service import catalog_service as cat
+
         cat._catalog = {}
         cat._meta = {}
         cat._fecha_carga = None
@@ -687,10 +869,12 @@ class TestLineaAmbiguaRobustez:
         """El S1 trae un nombre ambiguo y no hay catalogo: no debe reventar."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
             self._cargar({})
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="XX001", linea="00 - ACCESORIOS")])
+                [ItemStock(sku="XX001", linea="00 - ACCESORIOS")]
+            )
             # No hay catalogo: se conserva lo mejor posible, sin excepcion.
             assert items[0].linea_id is not None
         finally:
@@ -700,13 +884,21 @@ class TestLineaAmbiguaRobustez:
         """Si el catalogo no trae linea_codigo, usa su `linea` canonica."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "CD001": {"sku": "CD001", "nombre": "CRAYOLA",
-                          "linea": "CD", "linea_nombre": "ACCESORIOS"},
-            })
+            self._cargar(
+                {
+                    "CD001": {
+                        "sku": "CD001",
+                        "nombre": "CRAYOLA",
+                        "linea": "CD",
+                        "linea_nombre": "ACCESORIOS",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")]
+            )
             assert items[0].linea_id == "CD"
         finally:
             self._limpiar()
@@ -715,10 +907,10 @@ class TestLineaAmbiguaRobustez:
         """Un SKU nuevo (fuera del catalogo) cae al prefijo del SKU, sin error."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
             self._cargar({})
-            items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="ZZ123", linea="")])
+            items = servicio_stock._enriquecer_items([ItemStock(sku="ZZ123", linea="")])
             assert items[0].linea_id in ("ZZ", None) or items[0].linea_id == "ZZ"
         finally:
             self._limpiar()
@@ -727,14 +919,23 @@ class TestLineaAmbiguaRobustez:
         """El desambiguado no depende del grupo en stock-api: confia en catalogo."""
         from app.models.schemas import ItemStock
         from app.services.s1_service import servicio_stock
+
         try:
-            self._cargar({
-                "79102": {"sku": "79102", "nombre": "BORRADOR",
-                          "linea": "79", "linea_codigo": "79",
-                          "linea_nombre": "ACCESORIOS", "grupo": "BORRADOR"},
-            })
+            self._cargar(
+                {
+                    "79102": {
+                        "sku": "79102",
+                        "nombre": "BORRADOR",
+                        "linea": "79",
+                        "linea_codigo": "79",
+                        "linea_nombre": "ACCESORIOS",
+                        "grupo": "BORRADOR",
+                    },
+                }
+            )
             items = servicio_stock._enriquecer_items(
-                [ItemStock(sku="79102", linea="79 - ACCESORIOS")])
+                [ItemStock(sku="79102", linea="79 - ACCESORIOS")]
+            )
             assert items[0].linea_id == "79"
         finally:
             self._limpiar()

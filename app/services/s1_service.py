@@ -39,11 +39,11 @@ LIMA_TZ = timezone(timedelta(hours=-5))
 _PLACEHOLDERS = frozenset({"", "TODOS"})
 
 # Regex consolidados para linea
-_RE_2CHAR = re.compile(r'^([0-9A-Z]{2})$')
-_RE_4DIGIT = re.compile(r'^01([0-9]{2})$')
-_RE_4ALNUM = re.compile(r'^01([0-9A-Z]+)$')
-_RE_4ALNUM_DASH = re.compile(r'^01([0-9A-Z]+)\s*-\s*(.+)$')
-_RE_ANY_DASH = re.compile(r'^([0-9A-Z]{2,4})\s*-')
+_RE_2CHAR = re.compile(r"^([0-9A-Z]{2})$")
+_RE_4DIGIT = re.compile(r"^01([0-9]{2})$")
+_RE_4ALNUM = re.compile(r"^01([0-9A-Z]+)$")
+_RE_4ALNUM_DASH = re.compile(r"^01([0-9A-Z]+)\s*-\s*(.+)$")
+_RE_ANY_DASH = re.compile(r"^([0-9A-Z]{2,4})\s*-")
 
 
 def _a_lima(dt: Optional[datetime]) -> Optional[datetime]:
@@ -108,7 +108,6 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
     if m:
         return m.group(1)
     return None
-
 
 
 # Nombres de linea que designan a MAS de una linea: el S1 los trae iguales
@@ -181,9 +180,23 @@ class ServicioStock:
             fuente = "todas"
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_enriched_segun_fuente(fuente)
-        return self._construir_respuesta(items, fuente, almacen, busqueda, linea, grupo, um, categoria, limit, offset, tipo=tipo)
+        return self._construir_respuesta(
+            items,
+            fuente,
+            almacen,
+            busqueda,
+            linea,
+            grupo,
+            um,
+            categoria,
+            limit,
+            offset,
+            tipo=tipo,
+        )
 
-    def obtener_sku_enriched(self, sku: str, fuente: str = "general") -> Optional[ItemStockEnriched]:
+    def obtener_sku_enriched(
+        self, sku: str, fuente: str = "general"
+    ) -> Optional[ItemStockEnriched]:
         # Auto-detect: si la fuente es general pero el SKU existe en sucursales, usar todas
         if fuente == "general":
             self._refrescar_si_es_necesario("sucursales")
@@ -245,7 +258,11 @@ class ServicioStock:
 
     def obtener_health(self) -> HealthResponse:
         ahora = datetime.now(timezone.utc)
-        valido = bool(self._fecha_general and ahora - self._fecha_general <= timedelta(seconds=settings.cache_ttl_segundos))
+        valido = bool(
+            self._fecha_general
+            and ahora - self._fecha_general
+            <= timedelta(seconds=settings.cache_ttl_segundos)
+        )
         return HealthResponse(
             status="ok",
             timestamp=_a_lima(ahora),
@@ -253,7 +270,9 @@ class ServicioStock:
             cache_valido=valido,
         )
 
-    def procesar_archivo_local(self, ruta: str, fuente: str = "general") -> tuple[int, int]:
+    def procesar_archivo_local(
+        self, ruta: str, fuente: str = "general"
+    ) -> tuple[int, int]:
         if fuente not in ("general", "sucursales"):
             raise ValueError(f"fuente debe ser 'general' o 'sucursales', no '{fuente}'")
         datos = parsear_stock_desde_xls(ruta)
@@ -261,7 +280,9 @@ class ServicioStock:
             if fuente == "sucursales":
                 self._datos_sucursales = datos
                 self._items_sucursales = self._transformar_items(datos)
-                self._enriched_sucursales = self._enriquecer_items(self._items_sucursales)
+                self._enriched_sucursales = self._enriquecer_items(
+                    self._items_sucursales
+                )
                 self._fecha_sucursales = datetime.now(timezone.utc)
                 self._guardar_cache(settings.cache_ruta2, "sucursales")
             else:
@@ -280,16 +301,15 @@ class ServicioStock:
         almacenes_vistos: dict[str, int] = {}
         for item in self._items_general:
             for alm in item.almacenes:
-                almacenes_vistos[alm.almacen] = (
-                    almacenes_vistos.get(alm.almacen, 0) + 1
-                )
+                almacenes_vistos[alm.almacen] = almacenes_vistos.get(alm.almacen, 0) + 1
         for item in self._items_sucursales:
             for alm in item.almacenes:
-                almacenes_vistos[alm.almacen] = (
-                    almacenes_vistos.get(alm.almacen, 0) + 1
-                )
+                almacenes_vistos[alm.almacen] = almacenes_vistos.get(alm.almacen, 0) + 1
         resultado = sorted(
-            [{"almacen": k, "total_skus": v, "tipo": _tipo_almacen(k)} for k, v in almacenes_vistos.items()],
+            [
+                {"almacen": k, "total_skus": v, "tipo": _tipo_almacen(k)}
+                for k, v in almacenes_vistos.items()
+            ],
             key=lambda x: (0 if x["almacen"] == ALMACEN_PRINCIPAL else 1, x["almacen"]),
         )
         if tipo and tipo != "todas":
@@ -319,7 +339,11 @@ class ServicioStock:
                 cats[cat]["lineas"].add(item.linea)
         return sorted(
             [
-                {"categoria": v["categoria"], "total_skus": v["total_skus"], "lineas": sorted(v["lineas"])}
+                {
+                    "categoria": v["categoria"],
+                    "total_skus": v["total_skus"],
+                    "lineas": sorted(v["lineas"]),
+                }
                 for v in cats.values()
             ],
             key=lambda x: x["categoria"],
@@ -336,7 +360,8 @@ class ServicioStock:
     def _rebuild_todas(self) -> None:
         """Reconstruye el merge de enriched_general + enriched_sucursales."""
         self._enriched_todas = self._merge_items_por_sku(
-            self._enriched_general, self._enriched_sucursales,
+            self._enriched_general,
+            self._enriched_sucursales,
         )
 
     @staticmethod
@@ -374,14 +399,21 @@ class ServicioStock:
             # ya la desambigua por grupo (pinceles Crayola -> CD). Sin esto,
             # los Crayola quedaban como 79, mezclados con las tijeras.
             nombre_ambiguo = _nombre_linea(item.linea) in LINEAS_NOMBRE_AMBIGUO
-            if (not linea_id or nombre_ambiguo) and cat:
+            if cat:
                 # El catalogo publica `linea` como CODIGO canonico: es mas
                 # fiable que asumir que el prefijo del SKU es la linea
                 # (no lo es: 201737 es linea 21, 03117 es linea 78).
-                linea_id = (
+                # Si el catalogo tiene el SKU, su linea manda siempre —
+                # incluso cuando S1 trae un nombre no ambiguo (ej. CA001
+                # viene de S1 como "77 - PINTURA", pero el catalogo dice CA).
+                cat_linea = (
                     cat.get("linea_codigo", "").strip().upper()
                     or cat.get("linea", "").strip().upper()
-                ) or linea_id or item.sku[:2]
+                )
+                if cat_linea:
+                    linea_id = cat_linea
+            elif not linea_id or nombre_ambiguo:
+                linea_id = item.sku[:2]
 
             if cat:
                 # estado_linea: SOLO lo que diga el catálogo (guía ERP SKU_BX:
@@ -394,7 +426,9 @@ class ServicioStock:
                 cat_linea = cat.get("linea", "").strip()
                 # `linea_nombre` es el nombre legible: el catalogo publica
                 # `linea` como codigo canonico y el nombre aparte.
-                cat_linea_nombre = (cat.get("linea_nombre", "") or "").strip() or cat_linea
+                cat_linea_nombre = (
+                    cat.get("linea_nombre", "") or ""
+                ).strip() or cat_linea
                 cat_grupo = cat.get("grupo", "").strip()
                 cat_tipo = cat.get("tipo", "").strip()
                 cat_familia = cat.get("familia", "").strip()
@@ -403,8 +437,12 @@ class ServicioStock:
                 display_linea = item.linea if item.linea not in _PLACEHOLDERS else ""
                 display_grupo = item.grupo if item.grupo not in _PLACEHOLDERS else ""
                 display_tipo = item.tipo if item.tipo not in _PLACEHOLDERS else ""
-                display_familia = item.familia if item.familia not in _PLACEHOLDERS else ""
-                display_categoria = item.categoria if item.categoria not in _PLACEHOLDERS else ""
+                display_familia = (
+                    item.familia if item.familia not in _PLACEHOLDERS else ""
+                )
+                display_categoria = (
+                    item.categoria if item.categoria not in _PLACEHOLDERS else ""
+                )
                 if display_linea and " - " not in display_linea and cat_linea_nombre:
                     # No duplicar si el XLS ya traia el nombre.
                     if display_linea.upper() != cat_linea_nombre.upper():
@@ -423,57 +461,64 @@ class ServicioStock:
                 display_familia = display_familia or cat_familia
                 display_categoria = display_categoria or cat_categoria
 
-                enriched.append(ItemStockEnriched(
-                    sku=item.sku,
-                    descripcion=item.descripcion,
-                    um=item.um,
-                    linea=display_linea,
-                    grupo=display_grupo,
-                    tipo=display_tipo,
-                    familia=display_familia,
-                    categoria=display_categoria,
-                    un_bx=cat.get("un_bx", 1),
-                    peso_kg=cat.get("peso_kg", 0.0),
-                    precio=cat.get("precio", 0.0),
-                    nombre_corto=cat.get("nombre_corto", ""),
-                    ean13=cat.get("ean13", ""),
-                    ean14=cat.get("ean14", ""),
-                    estado_linea=cat_estado_linea,
-                    keywords=cat.get("keywords", []),
-                    orden=cat.get("orden", sku_index.get(item.sku, 0)),
-                    linea_id=linea_id,
-                    sin_catalogo=False,
-                    descontinuado=bool(cat.get("descontinuado", False)),
-                    almacenes=item.almacenes,
-                ))
+                enriched.append(
+                    ItemStockEnriched(
+                        sku=item.sku,
+                        descripcion=item.descripcion,
+                        um=item.um,
+                        linea=display_linea,
+                        grupo=display_grupo,
+                        tipo=display_tipo,
+                        familia=display_familia,
+                        categoria=display_categoria,
+                        un_bx=cat.get("un_bx", 1),
+                        peso_kg=cat.get("peso_kg", 0.0),
+                        precio=cat.get("precio", 0.0),
+                        nombre_corto=cat.get("nombre_corto", ""),
+                        ean13=cat.get("ean13", ""),
+                        ean14=cat.get("ean14", ""),
+                        estado_linea=cat_estado_linea,
+                        keywords=cat.get("keywords", []),
+                        orden=cat.get("orden", sku_index.get(item.sku, 0)),
+                        linea_id=linea_id,
+                        sin_catalogo=False,
+                        descontinuado=bool(cat.get("descontinuado", False)),
+                        almacenes=item.almacenes,
+                    )
+                )
             else:
-                display_linea = item.linea or (f"{linea_id} - UNKNOWN" if linea_id else "")
-                enriched.append(ItemStockEnriched(
-                    sku=item.sku,
-                    descripcion=item.descripcion,
-                    um=item.um,
-                    linea=display_linea,
-                    grupo=item.grupo,
-                    tipo=item.tipo,
-                    familia=item.familia,
-                    categoria=item.categoria,
-                    un_bx=1,
-                    peso_kg=0.0,
-                    precio=0.0,
-                    nombre_corto="",
-                    ean13="",
-                    ean14="",
-                    keywords=[],
-                    orden=0,
-                    linea_id=linea_id,
-                    sin_catalogo=True,
-                    almacenes=item.almacenes,
-                ))
+                display_linea = item.linea or (
+                    f"{linea_id} - UNKNOWN" if linea_id else ""
+                )
+                enriched.append(
+                    ItemStockEnriched(
+                        sku=item.sku,
+                        descripcion=item.descripcion,
+                        um=item.um,
+                        linea=display_linea,
+                        grupo=item.grupo,
+                        tipo=item.tipo,
+                        familia=item.familia,
+                        categoria=item.categoria,
+                        un_bx=1,
+                        peso_kg=0.0,
+                        precio=0.0,
+                        nombre_corto="",
+                        ean13="",
+                        ean14="",
+                        keywords=[],
+                        orden=0,
+                        linea_id=linea_id,
+                        sin_catalogo=True,
+                        almacenes=item.almacenes,
+                    )
+                )
         return enriched
 
     @staticmethod
     def _merge_items_por_sku(
-        items_a: list[ItemStockEnriched], items_b: list[ItemStockEnriched],
+        items_a: list[ItemStockEnriched],
+        items_b: list[ItemStockEnriched],
     ) -> list[ItemStockEnriched]:
         """Mergea dos listas de items por SKU, combinando los almacenes de ambos.
         Crea copias de los items para evitar mutar los originales."""
@@ -489,7 +534,10 @@ class ServicioStock:
                     if alm.almacen not in existentes:
                         mapa[item.sku].almacenes.append(alm.model_copy())
                 mapa[item.sku].almacenes.sort(
-                    key=lambda a: (0 if a.almacen == ALMACEN_PRINCIPAL else 1, a.almacen)
+                    key=lambda a: (
+                        0 if a.almacen == ALMACEN_PRINCIPAL else 1,
+                        a.almacen,
+                    )
                 )
             else:
                 mapa[item.sku] = item.model_copy(deep=True)
@@ -531,7 +579,11 @@ class ServicioStock:
 
             # Circuit breaker: si esta abierto, no intentar descargar
             if cb_abierto and ahora < cb_abierto:
-                logger.warning("Circuit breaker abierto para %s hasta %s", f, cb_abierto.isoformat())
+                logger.warning(
+                    "Circuit breaker abierto para %s hasta %s",
+                    f,
+                    cb_abierto.isoformat(),
+                )
                 continue
             # Si el circuit breaker expiro, cerrarlo y permitir intento
             if cb_abierto and ahora >= cb_abierto:
@@ -548,12 +600,17 @@ class ServicioStock:
             else:
                 edad = ahora - fecha
 
-            if edad > timedelta(seconds=settings.cache_ttl_segundos) and self._es_momento_valido():
+            if (
+                edad > timedelta(seconds=settings.cache_ttl_segundos)
+                and self._es_momento_valido()
+            ):
                 self._actualizar_desde_origen(f)
 
     def _actualizar_desde_origen(self, fuente: str) -> None:
         url = settings.source2_url if fuente == "sucursales" else settings.source1_url
-        cache_ruta = settings.cache_ruta2 if fuente == "sucursales" else settings.cache_ruta
+        cache_ruta = (
+            settings.cache_ruta2 if fuente == "sucursales" else settings.cache_ruta
+        )
         with self._lock:
             if fuente == "sucursales":
                 fecha = self._fecha_sucursales
@@ -562,7 +619,9 @@ class ServicioStock:
                 fecha = self._fecha_general
                 hay_items = bool(self._items_general)
             # Si otro hilo ya actualizo mientras esperamos el lock, salir
-            if fecha and datetime.now(timezone.utc) - fecha < timedelta(seconds=settings.cache_ttl_segundos):
+            if fecha and datetime.now(timezone.utc) - fecha < timedelta(
+                seconds=settings.cache_ttl_segundos
+            ):
                 return
             ruta_tmp = None
             try:
@@ -592,16 +651,29 @@ class ServicioStock:
                 # Actualizar circuit breaker
                 if fuente == "sucursales":
                     self._cb_fallos_sucursales += 1
-                    if self._cb_fallos_sucursales >= settings.circuit_breaker_max_fallos:
-                        self._cb_abierto_sucursales = datetime.now(timezone.utc) + timedelta(seconds=settings.circuit_breaker_reset_seg)
-                        logger.error("Circuit breaker ABIERTO para sucursales por %ds (fallos: %d)",
-                                     settings.circuit_breaker_reset_seg, self._cb_fallos_sucursales)
+                    if (
+                        self._cb_fallos_sucursales
+                        >= settings.circuit_breaker_max_fallos
+                    ):
+                        self._cb_abierto_sucursales = datetime.now(
+                            timezone.utc
+                        ) + timedelta(seconds=settings.circuit_breaker_reset_seg)
+                        logger.error(
+                            "Circuit breaker ABIERTO para sucursales por %ds (fallos: %d)",
+                            settings.circuit_breaker_reset_seg,
+                            self._cb_fallos_sucursales,
+                        )
                 else:
                     self._cb_fallos_general += 1
                     if self._cb_fallos_general >= settings.circuit_breaker_max_fallos:
-                        self._cb_abierto_general = datetime.now(timezone.utc) + timedelta(seconds=settings.circuit_breaker_reset_seg)
-                        logger.error("Circuit breaker ABIERTO para general por %ds (fallos: %d)",
-                                     settings.circuit_breaker_reset_seg, self._cb_fallos_general)
+                        self._cb_abierto_general = datetime.now(
+                            timezone.utc
+                        ) + timedelta(seconds=settings.circuit_breaker_reset_seg)
+                        logger.error(
+                            "Circuit breaker ABIERTO para general por %ds (fallos: %d)",
+                            settings.circuit_breaker_reset_seg,
+                            self._cb_fallos_general,
+                        )
                 logger.exception("Error actualizando cache %s", fuente)
                 if not hay_items:
                     raise RuntimeError(
@@ -629,16 +701,27 @@ class ServicioStock:
                         f"XLS demasiado grande: {content_length} bytes (max: {settings.xls_max_bytes})"
                     )
                 break
-            except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as e:
+            except (
+                httpx.TimeoutException,
+                httpx.NetworkError,
+                httpx.HTTPStatusError,
+            ) as e:
                 if intento == max_intentos - 1:
                     raise  # reintentado todas las veces, fallo de nuevo
-                if isinstance(e, httpx.HTTPStatusError) and e.response.status_code < 500:
+                if (
+                    isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code < 500
+                ):
                     raise  # 4xx: fallo definitivo, no reintentar
                 es_pool = "pool" in str(e).lower()
                 backoff = 2 if es_pool else 1
                 logger.warning(
                     "Descarga XLS intento %d/%d fallo (%s; pool_timeout=%s), reintentando en %ds",
-                    intento + 1, max_intentos, e, es_pool, backoff,
+                    intento + 1,
+                    max_intentos,
+                    e,
+                    es_pool,
+                    backoff,
                 )
                 time.sleep(backoff * (intento + 1))
                 continue
@@ -773,7 +856,7 @@ class ServicioStock:
 
         total = len(items)
         if limit is not None:
-            items = items[offset:offset + limit]
+            items = items[offset : offset + limit]
 
         fuente_label = {
             "general": "General (VES, 40, 118...)",
@@ -790,7 +873,9 @@ class ServicioStock:
         elif fuente == "todas":
             # Tomar la mas reciente de ambas fuentes
             ref_fecha = self._fecha_general
-            if self._fecha_sucursales and (not ref_fecha or self._fecha_sucursales > ref_fecha):
+            if self._fecha_sucursales and (
+                not ref_fecha or self._fecha_sucursales > ref_fecha
+            ):
                 ref_fecha = self._fecha_sucursales
             datos_ref = {}
             datos_ref.update(self._datos_general)
@@ -799,7 +884,10 @@ class ServicioStock:
             ref_fecha = self._fecha_general
             datos_ref = self._datos_general
 
-        cache_expirado = bool(ref_fecha and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos))
+        cache_expirado = bool(
+            ref_fecha
+            and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos)
+        )
 
         return StockEnrichedResponse(
             metadata=MetadataStock(
@@ -849,19 +937,32 @@ class ServicioStock:
         ruta_bak = ruta.with_suffix(ruta.suffix + ".bak")
         try:
             ruta.parent.mkdir(parents=True, exist_ok=True)
-            datos = self._datos_sucursales if fuente == "sucursales" else self._datos_general
-            fecha = self._fecha_sucursales if fuente == "sucursales" else self._fecha_general
+            datos = (
+                self._datos_sucursales
+                if fuente == "sucursales"
+                else self._datos_general
+            )
+            fecha = (
+                self._fecha_sucursales
+                if fuente == "sucursales"
+                else self._fecha_general
+            )
             payload = {
                 "fecha_descarga": fecha.isoformat() if fecha else None,
                 "datos": datos,
             }
-            ruta.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            ruta.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
             shutil.copy2(str(ruta), str(ruta_bak))
         except OSError:
             logger.exception("Error guardando cache %s en %s", fuente, ruta_cache)
 
     def _cargar_cache(self, ruta_cache: str, fuente: str) -> None:
-        for ruta in (Path(ruta_cache), Path(ruta_cache).with_suffix(Path(ruta_cache).suffix + ".bak")):
+        for ruta in (
+            Path(ruta_cache),
+            Path(ruta_cache).with_suffix(Path(ruta_cache).suffix + ".bak"),
+        ):
             if not ruta.exists():
                 continue
             try:
@@ -873,17 +974,23 @@ class ServicioStock:
                     if fecha_str:
                         self._fecha_sucursales = datetime.fromisoformat(fecha_str)
                         if self._fecha_sucursales.tzinfo is None:
-                            self._fecha_sucursales = self._fecha_sucursales.replace(tzinfo=timezone.utc)
+                            self._fecha_sucursales = self._fecha_sucursales.replace(
+                                tzinfo=timezone.utc
+                            )
                     self._datos_sucursales = datos
                     self._items_sucursales = items
                 else:
                     if fecha_str:
                         self._fecha_general = datetime.fromisoformat(fecha_str)
                         if self._fecha_general.tzinfo is None:
-                            self._fecha_general = self._fecha_general.replace(tzinfo=timezone.utc)
+                            self._fecha_general = self._fecha_general.replace(
+                                tzinfo=timezone.utc
+                            )
                     self._datos_general = datos
                     self._items_general = items
-                logger.info("Cache %s cargado desde %s: %d SKUs", fuente, ruta, len(items))
+                logger.info(
+                    "Cache %s cargado desde %s: %d SKUs", fuente, ruta, len(items)
+                )
                 return  # exito
             except (OSError, json.JSONDecodeError, ValueError) as e:
                 logger.warning("Error cargando cache %s desde %s: %s", fuente, ruta, e)

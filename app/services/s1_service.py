@@ -110,6 +110,26 @@ def _extraer_linea_id(linea: str) -> Optional[str]:
     return None
 
 
+
+# Nombres de linea que designan a MAS de una linea: el S1 los trae iguales
+# para productos de lineas distintas, asi que el nombre por si solo no
+# resuelve el codigo. Caso real: "ACCESORIOS" es la linea 79 (VINIFAN:
+# tijeras, tajadores, borradores) y tambien la CD (pinceles Crayola); el
+# GRUPO los desambigua y el catalogo ya publica el linea_codigo correcto.
+# Un nombre ambiguo NUNCA debe resolver la linea por si solo.
+LINEAS_NOMBRE_AMBIGUO = frozenset({"ACCESORIOS"})
+
+
+def _nombre_linea(linea: str) -> str:
+    """Nombre legible de la linea ('79 - ACCESORIOS' -> 'ACCESORIOS').
+
+    Si viene solo el codigo ('79'), no hay nombre y retorna ''.
+    """
+    if not linea or " - " not in linea:
+        return ""
+    return linea.split(" - ", 1)[1].strip().upper()
+
+
 def _tipo_almacen(codigo: str) -> str:
     if codigo in ALMACENES_MKTD or codigo.upper().startswith("S"):
         return "mktd"
@@ -349,14 +369,19 @@ class ServicioStock:
             cat = catalog_service.buscar(item.sku)
 
             linea_id = _extraer_linea_id(item.linea)
-            if not linea_id and cat:
+            # Un NOMBRE de linea ambiguo ("ACCESORIOS" = 79 y CD) no resuelve
+            # la linea por si solo: si el S1 lo trae, manda el catalogo, que
+            # ya la desambigua por grupo (pinceles Crayola -> CD). Sin esto,
+            # los Crayola quedaban como 79, mezclados con las tijeras.
+            nombre_ambiguo = _nombre_linea(item.linea) in LINEAS_NOMBRE_AMBIGUO
+            if (not linea_id or nombre_ambiguo) and cat:
                 # El catalogo publica `linea` como CODIGO canonico: es mas
                 # fiable que asumir que el prefijo del SKU es la linea
                 # (no lo es: 201737 es linea 21, 03117 es linea 78).
                 linea_id = (
                     cat.get("linea_codigo", "").strip().upper()
                     or cat.get("linea", "").strip().upper()
-                ) or item.sku[:2]
+                ) or linea_id or item.sku[:2]
 
             if cat:
                 # estado_linea: SOLO lo que diga el catálogo (guía ERP SKU_BX:
@@ -384,6 +409,15 @@ class ServicioStock:
                     # No duplicar si el XLS ya traia el nombre.
                     if display_linea.upper() != cat_linea_nombre.upper():
                         display_linea = f"{display_linea} - {cat_linea_nombre}"
+                if nombre_ambiguo and linea_id:
+                    # El S1 traia un nombre ambiguo ("79 - ACCESORIOS") y el
+                    # catalogo lo desambiguo (p.ej. CD): el display debe reflejar
+                    # el codigo corregido, no el del S1.
+                    display_linea = (
+                        f"{linea_id} - {cat_linea_nombre}"
+                        if cat_linea_nombre
+                        else linea_id
+                    )
                 display_grupo = display_grupo or cat_grupo
                 display_tipo = display_tipo or cat_tipo
                 display_familia = display_familia or cat_familia

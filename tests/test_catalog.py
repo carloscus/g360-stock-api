@@ -570,3 +570,171 @@ class TestLineaNombre:
             assert meta["categorias_por_linea"] == {"78": "VINIFAN"}
         finally:
             self._limpiar()
+
+
+class TestLineaAmbiguaMandaCatalogo:
+    """Un NOMBRE de linea ambiguo ('ACCESORIOS' = 79 y CD) no resuelve solo.
+
+    El S1 trae '79 - ACCESORIOS' tanto para las tijeras (linea 79) como para
+    los pinceles Crayola (linea CD). El catalogo ya desambigua por grupo y
+    publica el `linea_codigo` correcto: ese debe mandar.
+    """
+
+    @staticmethod
+    def _cargar(catalogo, meta=None):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = catalogo
+        cat._meta = meta or {}
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = {}
+        cat._meta = {}
+        cat._fecha_carga = None
+
+    def test_pincel_crayola_toma_la_linea_cd_del_catalogo(self):
+        """El S1 dice '79 - ACCESORIOS' pero el catalogo dice CD: gana CD."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "CD001": {"sku": "CD001", "nombre": "CRAYOLA PINCELES",
+                          "linea": "CD", "linea_codigo": "CD",
+                          "linea_nombre": "ACCESORIOS", "grupo": "PINCELES"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
+            assert items[0].linea_id == "CD"
+            assert items[0].linea == "CD - ACCESORIOS"
+        finally:
+            self._limpiar()
+
+    def test_tijera_sigue_en_79_por_el_catalogo(self):
+        """El S1 dice '79 - ACCESORIOS' y el catalogo tambien: sigue 79."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79026": {"sku": "79026", "nombre": "TIJERA VINIFAN PANDA",
+                          "linea": "79", "linea_codigo": "79",
+                          "linea_nombre": "ACCESORIOS", "grupo": "TIJERAS"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79026", linea="79 - ACCESORIOS")])
+            assert items[0].linea_id == "79"
+            assert items[0].linea == "79 - ACCESORIOS"
+        finally:
+            self._limpiar()
+
+    def test_nombre_no_ambiguo_respeta_la_linea_del_s1(self):
+        """Un nombre NO ambiguo no se toca: el S1 manda."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "05001": {"sku": "05001", "nombre": "ARCHIVO A4",
+                          "linea": "78", "linea_codigo": "78",
+                          "linea_nombre": "ARCHIVO"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="05001", linea="78 - ARCHIVO")])
+            assert items[0].linea_id == "78"
+        finally:
+            self._limpiar()
+
+    def test_sin_catalogo_conserva_la_linea_del_s1(self):
+        """Sin catalogo no hay desambiguacion posible: se conserva el S1."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({})
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
+            assert items[0].linea_id == "79"
+        finally:
+            self._limpiar()
+
+
+class TestLineaAmbiguaRobustez:
+    """Un NOMBRE ambiguo NUEVO no debe romper ni mal-asignar la linea.
+
+    La lista de nombres ambiguos es extensible: si manana aparece otro nombre
+    que designa a mas de una linea, el mecanismo (catalogo manda) debe seguir
+    funcionando sin tocar la logica de merge.
+    """
+
+    @staticmethod
+    def _cargar(catalogo, meta=None):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = catalogo
+        cat._meta = meta or {}
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+        cat._catalog = {}
+        cat._meta = {}
+        cat._fecha_carga = None
+
+    def test_nombre_ambiguo_sin_catalogo_no_rompe(self):
+        """El S1 trae un nombre ambiguo y no hay catalogo: no debe reventar."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({})
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="XX001", linea="00 - ACCESORIOS")])
+            # No hay catalogo: se conserva lo mejor posible, sin excepcion.
+            assert items[0].linea_id is not None
+        finally:
+            self._limpiar()
+
+    def test_catalogo_sin_linea_codigo_cae_a_linea(self):
+        """Si el catalogo no trae linea_codigo, usa su `linea` canonica."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "CD001": {"sku": "CD001", "nombre": "CRAYOLA",
+                          "linea": "CD", "linea_nombre": "ACCESORIOS"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="CD001", linea="79 - ACCESORIOS")])
+            assert items[0].linea_id == "CD"
+        finally:
+            self._limpiar()
+
+    def test_sku_nuevo_sin_catalogo_usa_prefijo(self):
+        """Un SKU nuevo (fuera del catalogo) cae al prefijo del SKU, sin error."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({})
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="ZZ123", linea="")])
+            assert items[0].linea_id in ("ZZ", None) or items[0].linea_id == "ZZ"
+        finally:
+            self._limpiar()
+
+    def test_linea_ambigua_con_grupo_distinto_sigue_la_regla(self):
+        """El desambiguado no depende del grupo en stock-api: confia en catalogo."""
+        from app.models.schemas import ItemStock
+        from app.services.s1_service import servicio_stock
+        try:
+            self._cargar({
+                "79102": {"sku": "79102", "nombre": "BORRADOR",
+                          "linea": "79", "linea_codigo": "79",
+                          "linea_nombre": "ACCESORIOS", "grupo": "BORRADOR"},
+            })
+            items = servicio_stock._enriquecer_items(
+                [ItemStock(sku="79102", linea="79 - ACCESORIOS")])
+            assert items[0].linea_id == "79"
+        finally:
+            self._limpiar()

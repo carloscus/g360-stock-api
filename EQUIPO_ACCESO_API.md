@@ -52,6 +52,33 @@ GET /api/v1/almacenes?tipo=mktd
 GET /api/v1/almacenes?tipo=venta
 ```
 
+### 6. Universo consolidado (una fila por SKU)
+```
+GET /api/v1/stock/skus?fuente=todas
+```
+No repite el SKU por almacén: devuelve `stock`, `predespacho` y `disponible`
+totales por SKU, más la ficha mínima (línea, grupo, tipo, familia, UM,
+categoría). Es el endpoint que usa `g360-master-data` para generar el catálogo.
+Con `solo_con_movimiento=false` incluye también los SKU sin stock.
+
+### Flags de negocio en la respuesta
+
+Cada item trae estos flags (los publica el catálogo maestro):
+
+| Flag | Para qué sirve |
+|------|----------------|
+| `categoria_venta` | `VINIBALL`, `VINIFAN`, `REPRESENTADAS` o `REVISION_VENTA` (no cotizar hasta revisar) |
+| `cotizable` / `por_activar` | Tiene precio / está publicado pero sin precio |
+| `en_guia` | Está curado en la guía de venta (SKU_BX) |
+| `compromiso` | Tenía predespacho al generar el catálogo |
+| `vigente` | El ERP no lo marca descontinuado |
+| `origen` | `erp` (ficha del maestro) o `s1` (solo existe en el reporte) |
+| `derivado_de` | SKU base si es un derivado sin embalaje (línea 98) |
+| `revision` | Badge: `sin_catalogo`, `por_activar`, `revision_venta`, `descontinuado`, `compromiso` o `""` |
+
+> Si un SKU aparece con `sin_catalogo: true`, tiene stock pero no está en el
+> catálogo maestro: avisar para publicarlo (no tiene precio, peso ni caja).
+
 ---
 
 ## Ejemplos de uso

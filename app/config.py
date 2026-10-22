@@ -16,22 +16,29 @@ class Settings(BaseSettings):
     # Clave de lectura para clientes estaticos. Puede ser publica, pero no
     # debe reutilizar la clave administrativa de upload/catalogo.
     read_api_key: str = ""
-    cache_ttl_segundos: int = 600  # 10 minutos: fuente online + mucha variacion en temporada
+    cache_ttl_segundos: int = (
+        600  # 10 minutos: fuente online + mucha variacion en temporada
+    )
     cache_ruta: str = "data/stock_cache.json"
     cache_ruta2: str = "data/stock_cache_sucursales.json"
     puerto: int = 8000
     # Catalogo maestro
     catalogo_ruta: str = "data/catalog_cache.json"
     catalogo_ttl_segundos: int = 21600  # 6 horas
+    # Tope del JSON de catalogo en bytes (independiente del XLS del S1).
+    # El catalogo crece con el negocio (3.6 MB con 3.538 SKUs en v3.6.0) y
+    # reutilizar xls_max_bytes (5 MB) lo dejaba a un par de cientos de SKUs
+    # de romper la subida con un 413.
+    catalogo_max_bytes: int = 33_554_432  # 32 MB
     # Cooldown anti-storm del refresh automatico del catalogo
     catalogo_refresh_max_fallos: int = 2
     catalogo_refresh_cooldown_seg: int = 300  # 5 min sin reintentar tras fallos
     # Fuente remota del catalogo (para auto-cargar cuando el disco es efimero, ej: Render free)
-    catalogo_raw_url: str = (
-        "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"
-    )
+    catalogo_raw_url: str = "https://raw.githubusercontent.com/carloscus/g360-master-data/main/output/catalogo_productos.json"
     # CORS - frontend publicado + desarrollo local
-    cors_origins: str = "https://carloscus.github.io,http://localhost:3000,http://localhost:5173"
+    cors_origins: str = (
+        "https://carloscus.github.io,http://localhost:3000,http://localhost:5173"
+    )
     # Rate limiting
     rate_limit: str = "60/minute"
     # Tope global (todas las IPs sumadas): protege CPU/costos en Render

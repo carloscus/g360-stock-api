@@ -19,13 +19,17 @@ from app.core.constants import (
     ALMACEN_PRINCIPAL,
     ALMACENES_MKTD,
     asignar_categoria,
+    categoria_venta,
 )
 from app.core.parsers import parsear_stock_desde_xls
 from app.models.schemas import (
     AlmacenStock,
     ItemStock,
+    ItemStockCompact,
     ItemStockEnriched,
     MetadataStock,
+    MetadataStockCompact,
+    StockCompactResponse,
     StockEnrichedResponse,
     ResumenStock,
     HealthResponse,
@@ -166,6 +170,72 @@ def _tipo_almacen(codigo: str) -> str:
     return "venta"
 
 
+def _nombre_sin_codigo(valor) -> str:
+    """'03 - BORRADOR' -> 'BORRADOR'.
+
+    El reporte S1 trae grupo/tipo/familia con el codigo adelante y el catalogo
+    los publica limpios: sin normalizar, /stock mostraba '01 - RESALTADOR' y
+    /catalog 'RESALTADOR' para el mismo SKU.
+    """
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    sin_codigo = re.sub(r"^[0-9A-Z]{2,4}\s*-\s*", "", txt).strip()
+    return sin_codigo or txt
+
+
+def _flags_desde_catalogo(cat: Optional[dict]) -> dict:
+    """Flags de negocio del item, tomados de la entrada del catalogo.
+
+    Los publica g360-master-data (v3.6.0). Si el catalogo esta cargado pero es
+    de una version vieja, los flags salen en su valor neutro (falso) y
+    `categoria_venta` se deriva de la categoria: nunca se inventa un
+    `cotizable=True` para un SKU sin precio.
+    """
+    cat = cat or {}
+    cat_venta = str(cat.get("categoria_venta") or "").strip().upper()
+    if not cat_venta:
+        cat_venta = categoria_venta(cat.get("categoria", ""))
+    descontinuado = bool(cat.get("descontinuado", False))
+    return {
+        "categoria_venta": cat_venta,
+        "en_guia": bool(cat.get("en_guia", False)),
+        "compromiso": bool(cat.get("compromiso", False)),
+        "cotizable": bool(cat.get("cotizable", False)),
+        "por_activar": bool(cat.get("por_activar", False)),
+        "vigente": bool(cat.get("vigente", not descontinuado)),
+        "origen": str(cat.get("origen", "") or ""),
+        "derivado_de": str(cat.get("derivado_de", "") or ""),
+    }
+
+
+def _revision_de_item(
+    *,
+    sin_catalogo: bool,
+    categoria_venta_: str,
+    por_activar: bool,
+    descontinuado: bool,
+    compromiso: bool,
+) -> str:
+    """Badge de estado para el frontend (una sola palabra, orden de prioridad).
+
+    El API no manda un booleano por cada caso: manda el estado mas importante
+    para que el cliente no tenga que repetir la regla de negocio y para que
+    /stock y /catalog coincidan.
+    """
+    if sin_catalogo:
+        return "sin_catalogo"
+    if por_activar:
+        return "por_activar"
+    if categoria_venta_ == "REVISION_VENTA":
+        return "revision_venta"
+    if descontinuado:
+        return "descontinuado"
+    if compromiso:
+        return "compromiso"
+    return ""
+
+
 class ServicioStock:
     def __init__(self):
         self._lock = threading.Lock()
@@ -253,10 +323,20 @@ class ServicioStock:
         linea = cat.get("linea", "").strip()
         linea_codigo = cat.get("linea_codigo", "").strip().upper()
         linea_id = linea_codigo or _extraer_linea_id(linea) or sku[:2]
+        flags = _flags_desde_catalogo(cat)
+        if not flags["categoria_venta"]:
+            flags["categoria_venta"] = categoria_venta(cat.get("categoria", ""))
+        revision = _revision_de_item(
+            sin_catalogo=False,
+            categoria_venta_=flags["categoria_venta"],
+            por_activar=flags["por_activar"],
+            descontinuado=bool(cat.get("descontinuado", False)),
+            compromiso=flags["compromiso"],
+        )
         return ItemStockEnriched(
             sku=sku.upper(),
             descripcion=cat.get("nombre", ""),
-            um="",
+            um=cat.get("um", ""),
             linea=linea,
             grupo=cat.get("grupo", ""),
             tipo=cat.get("tipo", ""),
@@ -276,6 +356,8 @@ class ServicioStock:
             orden=cat.get("orden", 0),
             sin_stock=True,
             descontinuado=bool(cat.get("descontinuado", False)),
+            revision=revision,
+            **flags,
         )
 
     def re_enriquecer(self) -> None:
@@ -518,6 +600,17 @@ class ServicioStock:
                 # clasificaran el mismo SKU de forma distinta.
                 display_categoria = cat_categoria or display_categoria
 
+                flags = _flags_desde_catalogo(cat)
+                if not flags["categoria_venta"]:
+                    flags["categoria_venta"] = categoria_venta(display_categoria)
+                revision = _revision_de_item(
+                    sin_catalogo=False,
+                    categoria_venta_=flags["categoria_venta"],
+                    por_activar=flags["por_activar"],
+                    descontinuado=bool(cat.get("descontinuado", False)),
+                    compromiso=flags["compromiso"],
+                )
+
                 enriched.append(
                     ItemStockEnriched(
                         sku=item.sku,
@@ -541,12 +634,15 @@ class ServicioStock:
                         sin_catalogo=False,
                         descontinuado=bool(cat.get("descontinuado", False)),
                         almacenes=item.almacenes,
+                        revision=revision,
+                        **flags,
                     )
                 )
             else:
                 display_linea = item.linea or (
                     f"{linea_id} - UNKNOWN" if linea_id else ""
                 )
+                cat_venta = categoria_venta(item.categoria)
                 enriched.append(
                     ItemStockEnriched(
                         sku=item.sku,
@@ -568,6 +664,8 @@ class ServicioStock:
                         linea_id=linea_id,
                         sin_catalogo=True,
                         almacenes=item.almacenes,
+                        categoria_venta=cat_venta,
+                        revision="sin_catalogo",
                     )
                 )
         return enriched
@@ -819,9 +917,12 @@ class ServicioStock:
                         "um": info.get("um", ""),
                         "linea": linea_norm,
                         "linea_id": _extraer_linea_id(linea_norm),
-                        "grupo": info.get("grupo", ""),
-                        "tipo": info.get("tipo", ""),
-                        "familia": info.get("familia", ""),
+                        # Grupo/tipo/familia SIN el codigo ("03 - BORRADOR" ->
+                        # "BORRADOR"): el catalogo los publica asi y antes
+                        # /stock y /catalog mostraban el mismo campo distinto.
+                        "grupo": _nombre_sin_codigo(info.get("grupo", "")),
+                        "tipo": _nombre_sin_codigo(info.get("tipo", "")),
+                        "familia": _nombre_sin_codigo(info.get("familia", "")),
                         "categoria": _categoria_de_item(sku, linea_norm),
                         "almacenes": {},
                     }
@@ -959,6 +1060,74 @@ class ServicioStock:
                 enriquecido=catalog_service.cargado,
             ),
             items=list(items),
+        )
+
+    def obtener_skus_compactos(
+        self, fuente: str = "general", solo_con_movimiento: bool = True
+    ) -> StockCompactResponse:
+        """Universo de stock consolidado por SKU, sin desglose por almacén.
+
+        Pensado para g360-master-data: necesita saber QUÉ SKUs tienen stock o
+        compromiso y su ficha mínima (línea, grupo, familia, UM), nada más.
+        El endpoint /stock repite el mismo SKU una vez por almacén y con 8
+        almacenes el payload se multiplica sin aportar información.
+        """
+        self._refrescar_si_es_necesario(fuente)
+        items = self._obtener_enriched_segun_fuente(fuente)
+        compactos: list[ItemStockCompact] = []
+        for item in items:
+            stock = sum(a.stock for a in item.almacenes)
+            predespacho = sum(a.predespacho for a in item.almacenes)
+            disponible = sum(a.disponible for a in item.almacenes)
+            if solo_con_movimiento and stock <= 0 and predespacho <= 0:
+                continue
+            compactos.append(
+                ItemStockCompact(
+                    sku=item.sku,
+                    descripcion=item.descripcion,
+                    um=item.um,
+                    linea=item.linea,
+                    linea_id=item.linea_id,
+                    grupo=item.grupo,
+                    tipo=item.tipo,
+                    familia=item.familia,
+                    categoria=item.categoria,
+                    categoria_venta=item.categoria_venta
+                    or categoria_venta(item.categoria),
+                    stock=stock,
+                    predespacho=predespacho,
+                    disponible=disponible,
+                    sin_catalogo=item.sin_catalogo,
+                )
+            )
+
+        ref_fecha = self._fecha_general
+        if fuente == "sucursales":
+            ref_fecha = self._fecha_sucursales
+        elif fuente == "todas" and self._fecha_sucursales:
+            if not ref_fecha or self._fecha_sucursales > ref_fecha:
+                ref_fecha = self._fecha_sucursales
+
+        ahora = datetime.now(timezone.utc)
+        cache_expirado = bool(
+            ref_fecha
+            and ahora - ref_fecha > timedelta(seconds=settings.cache_ttl_segundos)
+        )
+        fuente_label = {
+            "general": "General (VES, 40, 118...)",
+            "sucursales": "Sucursales (S1, S2, S3...)",
+            "todas": "General + Sucursales",
+        }.get(fuente, fuente)
+
+        return StockCompactResponse(
+            metadata=MetadataStockCompact(
+                fuente=fuente_label,
+                fecha_descarga=_a_lima(ref_fecha),
+                total_skus=len(compactos),
+                cache_expirado=cache_expirado,
+                enriquecido=catalog_service.cargado,
+            ),
+            items=compactos,
         )
 
     def _calcular_resumen(self) -> ResumenStock:

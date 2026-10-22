@@ -65,7 +65,7 @@ CATEGORIAS: dict[str, list[str]] = {
         "79",
     ],
     "INDUMENTARIA": ["57", "52"],
-    "REPRESENTADAS": ["85", "CE", "CF", "CA", "CB", "CC", "CD"],
+    "REPRESENTADAS": ["85", "CE", "CF", "CA", "CB", "CC", "CD", "CG"],
     "PUBLICIDAD": ["80", "81"],
     "OTROS": ["99"],
 }
@@ -118,3 +118,19 @@ def asignar_categoria(codigo_linea: str) -> str:
         if codigo.startswith(prefijo):
             return cat
     return CATEGORIA_DEFAULT
+
+
+# ── Semaforo de venta ─────────────────────────────────────────────────
+# Las TRES categorias de negocio que se venden. Todo lo demás (MATERIALES,
+# CIPTECH, INDUSTRIAL, PRODUCCION, DESCARTE Y VARIOS, OTROS...) queda en
+# REVISION_VENTA: puede estar publicado en el catálogo (que es el allowlist
+# real del API) pero necesita una revisión comercial antes de cotizarse.
+# Misma regla que g360-master-data (generar_catalogo_base.categoria_venta).
+CATEGORIAS_VENTA: tuple[str, ...] = ("VINIBALL", "VINIFAN", "REPRESENTADAS")
+CATEGORIA_VENTA_REVISION: str = "REVISION_VENTA"
+
+
+def categoria_venta(categoria: str) -> str:
+    """VINIBALL/VINIFAN/REPRESENTADAS, o REVISION_VENTA para el resto."""
+    cat = str(categoria or "").strip().upper()
+    return cat if cat in CATEGORIAS_VENTA else CATEGORIA_VENTA_REVISION

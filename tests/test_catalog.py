@@ -1350,3 +1350,295 @@ class TestStockYCatalogoNoSeContradicen:
             assert items[0].linea_id == "CG"
         finally:
             self._limpiar()
+
+
+class TestFlagsDeNegocio:
+    """Flags que publica g360-master-data (v3.6.0) y que /stock debe propagar.
+
+    El catalogo es el allowlist real del API: un SKU con stock puede estar
+    publicado sin precio (`por_activar`) o en la cuarta categoria
+    (`revision_venta`). Si el API no propaga el flag, el frontend no tiene
+    como saber por que un SKU aparece con precio 0.
+    """
+
+    @staticmethod
+    def _cargar(catalogo, meta=None):
+        from datetime import datetime, timezone
+
+        from app.services.catalog_service import catalog_service as cat
+
+        cat._catalog = catalogo
+        cat._meta = meta or {}
+        cat._fecha_carga = datetime.now(timezone.utc)
+
+    @staticmethod
+    def _limpiar():
+        from app.services.catalog_service import catalog_service as cat
+
+        cat._catalog = {}
+        cat._meta = {}
+        cat._fecha_carga = None
+
+    @staticmethod
+    def _producto(sku, **extra):
+        base = {
+            "sku": sku,
+            "nombre": f"PRODUCTO {sku}",
+            "linea": "78",
+            "linea_codigo": "78",
+            "linea_nombre": "ARCHIVO",
+            "grupo": "FOLDER",
+            "tipo": "FANTASIA",
+            "familia": "OFICIO",
+            "categoria": "VINIFAN",
+            "categoria_venta": "VINIFAN",
+            "precio": 4.5,
+            "un_bx": 12,
+            "keywords": [],
+            "orden": 10,
+            "en_guia": True,
+            "compromiso": False,
+            "cotizable": True,
+            "por_activar": False,
+            "vigente": True,
+            "origen": "erp",
+            "derivado_de": "",
+        }
+        base.update(extra)
+        return base
+
+    @staticmethod
+    def _flujo(sku, linea_s1="0178 - ARCHIVO", stock=5, predespacho=0):
+        from app.services.s1_service import servicio_stock
+
+        datos = {
+            "VES": {
+                sku: {
+                    "descripcion": f"PRODUCTO {sku}",
+                    "um": "UND",
+                    "linea": linea_s1,
+                    "grupo": "03 - FOLDER",
+                    "tipo": "01 - FANTASIA",
+                    "familia": "02 - OFICIO",
+                    "stock": stock,
+                    "predespacho": predespacho,
+                }
+            }
+        }
+        return servicio_stock._enriquecer_items(
+            servicio_stock._transformar_items(datos)
+        )
+
+    def test_flags_cotizable_se_propagan(self):
+        try:
+            self._cargar({"T001": self._producto("T001")})
+            item = self._flujo("T001")[0]
+            assert item.cotizable is True
+            assert item.por_activar is False
+            assert item.en_guia is True
+            assert item.categoria_venta == "VINIFAN"
+            assert item.origen == "erp"
+            assert item.revision == ""
+        finally:
+            self._limpiar()
+
+    def test_por_activar_cuando_no_hay_precio(self):
+        try:
+            self._cargar(
+                {
+                    "T002": self._producto(
+                        "T002",
+                        precio=0.0,
+                        cotizable=False,
+                        por_activar=True,
+                        origen="s1",
+                        en_guia=False,
+                    )
+                }
+            )
+            item = self._flujo("T002", linea_s1="0198 - PRODUCTOS SIN EMBALAJE")[0]
+            assert item.precio == 0.0
+            assert item.por_activar is True
+            assert item.cotizable is False
+            assert item.revision == "por_activar"
+        finally:
+            self._limpiar()
+
+    def test_revision_venta_para_categoria_fuera_de_negocio(self):
+        try:
+            self._cargar(
+                {
+                    "T003": self._producto(
+                        "T003",
+                        categoria="MATERIALES",
+                        categoria_venta="REVISION_VENTA",
+                    )
+                }
+            )
+            item = self._flujo("T003", linea_s1="0140 - MATERIALES")[0]
+            assert item.categoria_venta == "REVISION_VENTA"
+            assert item.revision == "revision_venta"
+        finally:
+            self._limpiar()
+
+    def test_compromiso_se_propaga(self):
+        try:
+            self._cargar({"T004": self._producto("T004", compromiso=True)})
+            item = self._flujo("T004", predespacho=3)[0]
+            assert item.compromiso is True
+            assert item.revision == "compromiso"
+        finally:
+            self._limpiar()
+
+    def test_derivado_metodo_d_expone_la_base(self):
+        try:
+            self._cargar({"T005D": self._producto("T005D", derivado_de="T005")})
+            item = self._flujo("T005D", linea_s1="0198 - PRODUCTOS SIN EMBALAJE")[0]
+            assert item.derivado_de == "T005"
+            assert item.cotizable is True
+        finally:
+            self._limpiar()
+
+    def test_sin_catalogo_marca_revision(self):
+        try:
+            self._cargar({})
+            item = self._flujo("T999", linea_s1="0178 - ARCHIVO")[0]
+            assert item.sin_catalogo is True
+            assert item.revision == "sin_catalogo"
+            assert item.cotizable is False
+        finally:
+            self._limpiar()
+
+    def test_normaliza_grupo_tipo_familia(self):
+        """El S1 trae '03 - FOLDER'; /stock y /catalog deben mostrar 'FOLDER'."""
+        try:
+            self._cargar({})
+            item = self._flujo("T998", linea_s1="0178 - ARCHIVO")[0]
+            assert item.grupo == "FOLDER"
+            assert item.tipo == "FANTASIA"
+            assert item.familia == "OFICIO"
+        finally:
+            self._limpiar()
+
+
+class TestStockCompacto:
+    """Endpoint /api/v1/stock/skus: universo consolidado, sin almacenes."""
+
+    def test_route_no_es_sombreado_por_stock_sku(self):
+        """/api/v1/stock/skus debe responder el compacto, no 404 de /stock/{sku}."""
+        from app.services.s1_service import servicio_stock
+        from datetime import datetime, timezone
+
+        original = servicio_stock._enriched_general
+        original_refrescar = servicio_stock._refrescar_si_es_necesario
+        original_fecha = servicio_stock._fecha_general
+        try:
+            servicio_stock._refrescar_si_es_necesario = lambda *a, **k: None
+            servicio_stock._fecha_general = datetime.now(timezone.utc)
+            servicio_stock._enriched_general = self._items()
+
+            respuesta = client.get("/api/v1/stock/skus")
+            assert respuesta.status_code == 200
+            datos = respuesta.json()
+            assert datos["metadata"]["total_skus"] == 2
+            item = {i["sku"]: i for i in datos["items"]}["T100"]
+            # Consolidado: el total no depende de cuantos almacenes tenga.
+            assert item["stock"] == 12
+            assert item["predespacho"] == 2
+            assert item["disponible"] == 10
+            assert item["linea_id"] == "78"
+            assert item["categoria_venta"] == "VINIFAN"
+            assert "almacenes" not in item
+        finally:
+            servicio_stock._enriched_general = original
+            servicio_stock._refrescar_si_es_necesario = original_refrescar
+            servicio_stock._fecha_general = original_fecha
+
+    def test_solo_con_movimiento_omite_skus_sin_stock(self):
+        from app.services.s1_service import servicio_stock
+        from datetime import datetime, timezone
+
+        original = servicio_stock._enriched_general
+        original_refrescar = servicio_stock._refrescar_si_es_necesario
+        original_fecha = servicio_stock._fecha_general
+        try:
+            servicio_stock._refrescar_si_es_necesario = lambda *a, **k: None
+            servicio_stock._fecha_general = datetime.now(timezone.utc)
+            servicio_stock._enriched_general = self._items(sin_stock=True)
+
+            completo = servicio_stock.obtener_skus_compactos(solo_con_movimiento=False)
+            movimientos = servicio_stock.obtener_skus_compactos(
+                solo_con_movimiento=True
+            )
+            assert len(completo.items) == 3
+            assert len(movimientos.items) == 2
+            assert "T102" not in {i.sku for i in movimientos.items}
+        finally:
+            servicio_stock._enriched_general = original
+            servicio_stock._refrescar_si_es_necesario = original_refrescar
+            servicio_stock._fecha_general = original_fecha
+
+    @staticmethod
+    def _items(sin_stock=False):
+        from app.models.schemas import AlmacenStock, ItemStockEnriched
+
+        items = [
+            ItemStockEnriched(
+                sku="T100",
+                descripcion="PRODUCTO T100",
+                um="UND",
+                linea="78 - ARCHIVO",
+                linea_id="78",
+                grupo="FOLDER",
+                tipo="FANTASIA",
+                familia="OFICIO",
+                categoria="VINIFAN",
+                categoria_venta="VINIFAN",
+                almacenes=[
+                    AlmacenStock(
+                        almacen="VES",
+                        stock=10,
+                        predespacho=2,
+                        disponible=8,
+                    ),
+                    AlmacenStock(
+                        almacen="40",
+                        stock=2,
+                        predespacho=0,
+                        disponible=2,
+                    ),
+                ],
+            ),
+            ItemStockEnriched(
+                sku="T101",
+                descripcion="PRODUCTO T101",
+                um="CJA",
+                linea="0198 - PRODUCTOS SIN EMBALAJE",
+                linea_id="98",
+                grupo="SIN EMBALAJE",
+                tipo="",
+                familia="",
+                categoria="DESCARTE Y VARIOS",
+                categoria_venta="REVISION_VENTA",
+                sin_catalogo=True,
+                almacenes=[
+                    AlmacenStock(almacen="VES", stock=0, predespacho=4, disponible=0)
+                ],
+            ),
+        ]
+        if sin_stock:
+            items.append(
+                ItemStockEnriched(
+                    sku="T102",
+                    descripcion="PRODUCTO T102",
+                    um="UND",
+                    linea="78 - ARCHIVO",
+                    linea_id="78",
+                    almacenes=[
+                        AlmacenStock(
+                            almacen="VES", stock=0, predespacho=0, disponible=0
+                        )
+                    ],
+                )
+            )
+        return items

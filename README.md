@@ -37,6 +37,7 @@ flowchart TD
 
     subgraph ENDPOINTS["Endpoints REST"]
         STOCK["GET /api/v1/stock"]
+        COMPACTO["GET /api/v1/stock/skus"]
         SKU["GET /api/v1/stock/{sku}"]
         ALM["GET /api/v1/almacenes"]
         RESUMEN["GET /api/v1/resumen"]
@@ -44,6 +45,7 @@ flowchart TD
     end
 
     MERGE --> STOCK
+    MERGE --> COMPACTO
     MERGE --> SKU
     CACHE1 --> ALM
     CACHE2 --> ALM
@@ -117,9 +119,8 @@ sequenceDiagram
 |--------|------|-------------|
 | `GET` | `/api/v1/health` | Estado del servicio y cache |
 | `GET` | `/api/v1/stock` | Listar stock completo con filtros (enriquecido) |
+| `GET` | `/api/v1/stock/skus` | Universo consolidado por SKU, **sin** desglose por almacén (para master-data) |
 | `GET` | `/api/v1/stock/{sku}` | Detalle de un SKU con desglose por almacén |
-
-> **SKUs sin stock aún**: si el SKU existe en el catálogo maestro pero no aparece en el reporte (ingreso futuro), `/stock/{sku}` responde **200** con `sin_stock: true` y `almacenes: []`. Obtener **404** significa que el SKU no existe ni en el reporte ni en el catálogo.
 | `GET` | `/api/v1/almacenes` | Lista de almacenes disponibles |
 | `GET` | `/api/v1/lineas` | Lista de líneas de producto |
 | `GET` | `/api/v1/categorias` | Categorías de negocio con líneas |
@@ -128,6 +129,41 @@ sequenceDiagram
 | `POST` | `/api/v1/upload/catalog` | Subir catálogo maestro JSON |
 | `GET` | `/api/v1/catalog` | Lista del catálogo maestro (sin stock) |
 | `GET` | `/api/v1/catalog/health` | Estado del catálogo cargado |
+
+> **SKUs sin stock aún**: si el SKU existe en el catálogo maestro pero no aparece en el reporte (ingreso futuro), `/stock/{sku}` responde **200** con `sin_stock: true` y `almacenes: []`. Obtener **404** significa que el SKU no existe ni en el reporte ni en el catálogo.
+
+### Parámetros de GET /api/v1/stock/skus
+
+| Parámetro | Tipo | Default | Descripción |
+|-----------|------|---------|-------------|
+| `fuente` | string | `general` | `general`, `sucursales`, `todas` |
+| `solo_con_movimiento` | bool | `true` | Omite SKUs sin stock y sin compromiso |
+
+Devuelve, por SKU: `descripcion`, `um`, `linea`, `linea_id`, `grupo`, `tipo`,
+`familia`, `categoria`, `categoria_venta`, `stock`, `predespacho`,
+`disponible` y `sin_catalogo`. El payload es ~8 veces más chico que `/stock`
+(el mismo SKU no se repite por almacén).
+
+### Flags de negocio
+
+`/stock`, `/stock/skus` y `/catalog` exponen los flags que publica
+`g360-master-data` v3.6.0:
+
+| Flag | Significado |
+|------|-------------|
+| `categoria_venta` | `VINIBALL` / `VINIFAN` / `REPRESENTADAS` o `REVISION_VENTA` |
+| `en_guia` | Está curado en la guía SKU_BX |
+| `compromiso` | Tenía predespacho al generar el catálogo |
+| `cotizable` | `precio > 0` |
+| `por_activar` | Está publicado pero sin precio (complementario de `cotizable`) |
+| `vigente` | El ERP no lo marca descontinuado |
+| `origen` | `erp` o `s1` (fuente de la ficha comercial) |
+| `derivado_de` | SKU base cuando es un derivado de la línea 98 |
+| `revision` | Badge calculado: `sin_catalogo` → `por_activar` → `revision_venta` → `descontinuado` → `compromiso` → `""` |
+
+> El catálogo es el **allowlist** del API: un SKU con stock que no esté
+> publicado aparece como `sin_catalogo` (sin precio, peso ni caja) y con
+> `revision="sin_catalogo"`.
 
 ### Parámetros de GET /api/v1/stock
 
@@ -170,6 +206,9 @@ GET /api/v1/stock?tipo=mktd
 
 # Detalle completo de SKU
 GET /api/v1/stock/011019?fuente=todas
+
+# Universo consolidado (una fila por SKU, sin almacenes)
+GET /api/v1/stock/skus?fuente=todas&solo_con_movimiento=true
 
 # Resumen ejecutivo
 GET /api/v1/resumen
@@ -254,7 +293,7 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 - **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
-Campos usados: `sku`, `linea`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado` (badge "Descontinuado"/"Últimas unidades" en el reporter)
+Campos usados: `sku`, `linea`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `categoria_venta`, `um`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades")
 
 ---
 

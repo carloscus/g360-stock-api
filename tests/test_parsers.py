@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
@@ -20,7 +20,7 @@ class TestXlsFallback:
     def test_leer_xls_tiene_encabezados(self):
         filas = leer_xls(str(RUTA_SAMPLE))
         encabezado = filas[9]
-        assert "ARTICULO" in encabezado[2] or "ARTÍCULO" in encabezado[2]
+        assert "ARTICULO" in encabezado[2] or "ARTÃCULO" in encabezado[2]
         assert "ALMACEN" in encabezado[9]
         assert "STOCK" in encabezado[13]
 
@@ -77,9 +77,9 @@ class TestParser:
                 assert sku.strip(), f"SKU vacio en almacen {almacen}"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Deteccion por anclas (sin sample: filas sinteticas)
-# ─────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 from app.core import parsers as _parsers  # noqa: E402
 from app.core.parsers import (  # noqa: E402
@@ -248,3 +248,102 @@ class TestParsearSintetico:
         resultado = _parsear(monkeypatch, filas)
         # El layout historico igual lee: no rompe el servicio.
         assert resultado["VES"]["016763"]["stock"] == 8
+
+
+class TestEnriquecerNoHaceEco:
+    """El universo compacto debe llevar la ficha del S1, no el eco del
+    catalogo. Caso real: un item S1-only entro una vez al catalogo con
+    linea OTROS (fallback); al regenerar, el enriquecido repetia OTROS
+    desde el catalogo y el OTROS no salia nunca (ni los D se enlazaban)."""
+
+    def _item_s1(self):
+        from app.models.schemas import AlmacenStock, ItemStock
+
+        return ItemStock(
+            sku="03077D",
+            descripcion="FOLDER N VINIFAN TAPA",
+            um="UND",
+            linea="0198 - PRODUCTOS SIN EMBALAJE",
+            grupo="06 - ARCHIVOS",
+            tipo="TA - TAPA",
+            familia="OF - OFICIO",
+            categoria="",
+            almacenes=[
+                AlmacenStock(
+                    almacen="VES", tipo="venta", disponible=7, stock=7, predespacho=0
+                )
+            ],
+        )
+
+    def _catalogo_echo(self):
+        from app.services.catalog_service import catalog_service
+
+        catalog_service._catalog = {
+            "03077D": {
+                "sku": "03077D",
+                "origen": "s1",
+                "linea": "OTROS",
+                "linea_codigo": "",
+                "linea_nombre": "OTROS",
+                "categoria": "OTROS",
+            }
+        }
+        return catalog_service
+
+    def test_item_s1_conserva_linea_del_reporte(self, monkeypatch):
+        from app.services.s1_service import ServicioStock
+
+        catalog_service = self._catalogo_echo()
+        try:
+            servicio = ServicioStock.__new__(ServicioStock)
+            resultado = servicio._enriquecer_items([self._item_s1()])
+        finally:
+            catalog_service._catalog = {}
+            catalog_service._fecha_carga = None
+        assert len(resultado) == 1
+        assert resultado[0].linea == "0198 - PRODUCTOS SIN EMBALAJE"
+        assert resultado[0].linea_id in ("98", "0198")
+
+    def test_item_erp_sigue_mandando_catalogo(self):
+        from app.services.s1_service import ServicioStock
+        from app.models.schemas import AlmacenStock, ItemStock
+        from app.services.catalog_service import catalog_service
+
+        catalog_service._catalog = {
+            "CA001": {
+                "sku": "CA001",
+                "origen": "erp",
+                "linea": "CA",
+                "linea_codigo": "CA",
+                "linea_nombre": "PINTURA",
+                "categoria": "REPRESENTADAS",
+            }
+        }
+        try:
+            servicio = ServicioStock.__new__(ServicioStock)
+            item = ItemStock(
+                sku="CA001",
+                descripcion="PINTURA",
+                um="UND",
+                linea="77 - PINTURA",
+                grupo="",
+                tipo="",
+                familia="",
+                categoria="",
+                almacenes=[
+                    AlmacenStock(
+                        almacen="VES",
+                        tipo="venta",
+                        disponible=1,
+                        stock=1,
+                        predespacho=0,
+                    )
+                ],
+            )
+            resultado = servicio._enriquecer_items([item])
+        finally:
+            catalog_service._catalog = {}
+            catalog_service._fecha_carga = None
+        # El catalogo ERP manda (desambiguacion Crayola): no regresion.
+        assert resultado[0].linea_id == "CA"
+

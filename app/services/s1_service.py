@@ -506,6 +506,14 @@ class ServicioStock:
         for item in items:
             cat = catalog_service.buscar(item.sku)
 
+            # El catalogo solo manda en TAXONOMIA si trae conocimiento
+            # propio (origen ERP). Un item S1-only repite en el catalogo
+            # lo que el S1 dijo: si mandara el catalogo ahi, seria un eco
+            # que fija para siempre la primera lectura (incluso si fue
+            # vacia o un placeholder). Los catalogos viejos no traen
+            # 'origen': se asume ERP para no cambiar su comportamiento.
+            cat_es_erp = (cat or {}).get("origen", "erp") == "erp"
+
             linea_id = _extraer_linea_id(item.linea)
             # Codigo de linea tal como viene del reporte S1, antes de que el
             # catalogo lo sobrescriba: sirve para saber si el display debe
@@ -528,13 +536,15 @@ class ServicioStock:
             # ya la desambigua por grupo (pinceles Crayola -> CD). Sin esto,
             # los Crayola quedaban como 79, mezclados con las tijeras.
             nombre_ambiguo = _nombre_linea(item.linea) in LINEAS_NOMBRE_AMBIGUO
-            if cat:
+            if cat and cat_es_erp:
                 # El catalogo publica `linea` como CODIGO canonico: es mas
                 # fiable que asumir que el prefijo del SKU es la linea
                 # (no lo es: 201737 es linea 21, 03117 es linea 78).
                 # Si el catalogo tiene el SKU, su linea manda siempre —
                 # incluso cuando S1 trae un nombre no ambiguo (ej. CA001
                 # viene de S1 como "77 - PINTURA", pero el catalogo dice CA).
+                # Solo cuando el catalogo trae conocimiento propio (origen
+                # ERP): un item S1-only repite lo del S1 y no manda nada.
                 cat_linea = (
                     cat.get("linea_codigo", "").strip().upper()
                     or cat.get("linea", "").strip().upper()
@@ -572,16 +582,26 @@ class ServicioStock:
                 display_categoria = (
                     item.categoria if item.categoria not in _PLACEHOLDERS else ""
                 )
-                if display_linea and " - " not in display_linea and cat_linea_nombre:
+                if (
+                    display_linea
+                    and " - " not in display_linea
+                    and cat_linea_nombre
+                    and cat_es_erp
+                ):
                     # No duplicar si el XLS ya traia el nombre.
                     if display_linea.upper() != cat_linea_nombre.upper():
                         display_linea = f"{display_linea} - {cat_linea_nombre}"
-                if nombre_ambiguo and linea_id:
+                if nombre_ambiguo and linea_id and cat_es_erp:
                     # El S1 traia un nombre ambiguo ("79 - ACCESORIOS") y el
                     # catalogo lo desambiguo (p.ej. CD): el display debe reflejar
                     # el codigo corregido, no el del S1.
                     display_linea = _linea_display(linea_id, cat_linea_nombre)
-                elif cat_linea and linea_id_s1 and cat_linea.upper() != linea_id_s1:
+                elif (
+                    cat_linea
+                    and linea_id_s1
+                    and cat_linea.upper() != linea_id_s1
+                    and cat_es_erp
+                ):
                     # La linea canonica del catalogo difiere de la del reporte
                     # (p.ej. CB007 viene de S1 como "76 - ESCRITURA" pero el
                     # catalogo lo ubica en la linea Crayola "CB"): manda el

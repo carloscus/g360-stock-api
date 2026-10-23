@@ -58,7 +58,9 @@ class TestParser:
         for almacen, productos in resultado.items():
             for sku, info in productos.items():
                 assert info["stock"] >= 0, f"Stock negativo en {almacen}/{sku}"
-                assert info["predespacho"] >= 0, f"Predespacho negativo en {almacen}/{sku}"
+                assert info["predespacho"] >= 0, (
+                    f"Predespacho negativo en {almacen}/{sku}"
+                )
 
     def test_parsear_no_tiene_total_como_sku(self):
         resultado = parsear_stock_desde_xls(str(RUTA_SAMPLE))
@@ -73,3 +75,165 @@ class TestParser:
         for almacen, productos in resultado.items():
             for sku in productos:
                 assert sku.strip(), f"SKU vacio en almacen {almacen}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Deteccion por anclas (sin sample: filas sinteticas)
+# ─────────────────────────────────────────────────────────────────────────────
+
+from app.core import parsers as _parsers  # noqa: E402
+from app.core.parsers import (  # noqa: E402
+    COLUMNAS_POR_DEFECTO,
+    detectar_columna_categoria,
+    detectar_columnas,
+)
+
+ANCHO = 20
+
+
+def _fila(ancho: int = ANCHO) -> list:
+    return [""] * ancho
+
+
+def _reporte(desplazamiento: int = 0, preambulo: int = 9) -> list[list]:
+    """Reporte S1 sintetico: preambulo + encabezado + categorias + datos."""
+    d = desplazamiento
+    filas = [_fila() for _ in range(preambulo)]
+    cabecera = _fila()
+    cabecera[2 + d] = "ARTICULO"
+    cabecera[9 + d] = "ALMACEN"
+    cabecera[12 + d] = "UM"
+    cabecera[13 + d] = "STOCK"
+    cabecera[16 + d] = "PREDESPACHO"
+    cabecera[18 + d] = "DISPONIBLE"
+    filas.append(cabecera)
+    for texto in (
+        "LINEA: 0101 - PELOTAS",
+        "GRUPO: 02 - FUTBOL",
+        "TIPO: 05 - N5",
+        "FAMILIA: 07 - BLANCO",
+    ):
+        fila = _fila()
+        fila[1 + d] = texto
+        filas.append(fila)
+    for sku, desc, almacen, stock, pred in (
+        ("016763", "PELOTA VINIBALL N5", "VES", 5, 2),
+        ("016763", "PELOTA VINIBALL N5", "VES", 3, 1),
+        ("016764", "PELOTA VINIFAN N3", "118", 7, 0),
+    ):
+        fila = _fila()
+        fila[1 + d] = sku
+        fila[2 + d] = desc
+        fila[9 + d] = almacen
+        fila[12 + d] = "UND"
+        fila[13 + d] = stock
+        fila[16 + d] = pred
+        filas.append(fila)
+    total = _fila()
+    total[1 + d] = "TOTAL"
+    filas.append(total)
+    return filas
+
+
+def _parsear(monkeypatch, filas) -> dict:
+    monkeypatch.setattr(_parsers, "leer_xls", lambda ruta: filas)
+    return parsear_stock_desde_xls("sintetico.xls")
+
+
+class TestDetectarColumnas:
+    def test_encabezado_real(self):
+        columnas = detectar_columnas(_reporte())
+        assert columnas is not None
+        assert columnas.fila_datos == 10
+        assert columnas.sku == 1
+        assert columnas.descripcion == 2
+        assert columnas.almacen == 9
+        assert columnas.um == 12
+        assert columnas.stock == 13
+        assert columnas.predespacho == 16
+        assert columnas.detectado is True
+
+    def test_preambulo_mas_largo(self):
+        columnas = detectar_columnas(_reporte(preambulo=25))
+        assert columnas is not None
+        assert columnas.fila_datos == 26
+
+    def test_columnas_desplazadas(self):
+        columnas = detectar_columnas(_reporte(desplazamiento=1))
+        assert columnas is not None
+        assert columnas.sku == 2
+        assert columnas.almacen == 10
+        assert columnas.stock == 14
+
+    def test_sin_encabezado_devuelve_none(self):
+        assert detectar_columnas([_fila() for _ in range(15)]) is None
+
+    def test_falta_ancla_devuelve_none(self):
+        filas = _reporte()
+        filas[9][16] = ""
+        assert detectar_columnas(filas) is None
+
+    def test_sku_fuera_de_descripcion_menos_uno(self):
+        filas = _reporte()
+        # El SKU vive en la columna 0 y la 1 queda vacia.
+        for fila in filas[10:]:
+            if len(fila) > 1 and "PELOTA" in str(fila[2]):
+                fila[0] = fila[1]
+                fila[1] = ""
+        columnas = detectar_columnas(filas)
+        assert columnas is not None
+        assert columnas.sku == 0
+
+    def test_defecto_es_el_layout_historico(self):
+        assert COLUMNAS_POR_DEFECTO.sku == 1
+        assert COLUMNAS_POR_DEFECTO.stock == 13
+        assert COLUMNAS_POR_DEFECTO.detectado is False
+
+
+class TestDetectarColumnaCategoria:
+    def test_categoria_en_columna_1(self):
+        assert detectar_columna_categoria(_reporte()) == 1
+
+    def test_categoria_desplazada(self):
+        assert detectar_columna_categoria(_reporte(desplazamiento=1)) == 2
+
+    def test_sin_categorias(self):
+        prefijos = ("LINEA:", "GRUPO:", "TIPO:", "FAMILIA:")
+        filas = [
+            fila for fila in _reporte() if not str(fila[1]).upper().startswith(prefijos)
+        ]
+        assert detectar_columna_categoria(filas) is None
+
+
+class TestParsearSintetico:
+    def test_lee_stock_y_acumula(self, monkeypatch):
+        resultado = _parsear(monkeypatch, _reporte())
+        assert resultado["VES"]["016763"]["stock"] == 8
+        assert resultado["VES"]["016763"]["predespacho"] == 3
+        assert resultado["118"]["016764"]["stock"] == 7
+
+    def test_lee_categorias(self, monkeypatch):
+        resultado = _parsear(monkeypatch, _reporte())
+        info = resultado["VES"]["016763"]
+        assert info["linea"] == "0101 - PELOTAS"
+        assert info["grupo"] == "02 - FUTBOL"
+        assert info["tipo"] == "05 - N5"
+        assert info["familia"] == "07 - BLANCO"
+        assert info["um"] == "UND"
+
+    def test_no_crea_sku_total(self, monkeypatch):
+        resultado = _parsear(monkeypatch, _reporte())
+        for productos in resultado.values():
+            assert "TOTAL" not in {s.upper() for s in productos}
+
+    def test_reporte_desplazado_da_el_mismo_resultado(self, monkeypatch):
+        normal = _parsear(monkeypatch, _reporte())
+        desplazado = _parsear(monkeypatch, _reporte(desplazamiento=1))
+        assert normal == desplazado
+
+    def test_sin_anclas_cae_al_layout_historico(self, monkeypatch):
+        filas = _reporte()
+        filas[9][16] = ""  # sin PREDESPACHO no hay anclas
+        resultado = _parsear(monkeypatch, filas)
+        # El layout historico igual lee: no rompe el servicio.
+        assert resultado["VES"]["016763"]["stock"] == 8

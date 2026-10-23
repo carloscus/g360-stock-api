@@ -7,6 +7,36 @@ COLUMNA_UM: int = 12
 COLUMNA_STOCK: int = 13
 COLUMNA_PREDESPACHO: int = 16
 
+# Estas posiciones son solo el FALLBACK: el parser ubica las columnas por
+# ancla (ver ANCLAS_COLUMNAS). El reporte S1 trae el encabezado visual en una
+# fila variable, con celdas combinadas y el SKU en la columna anterior a
+# 'ARTICULO'; leer por posicion fija convierte un cambio de columna en un
+# stock mal atribuido sin un solo error.
+
+# Anclas: texto del encabezado -> campo. El orden de los alias importa poco,
+# pero el de las claves no: la fila se acepta cuando estan TODAS las
+# obligatorias.
+ANCLAS_COLUMNAS: dict[str, tuple[str, ...]] = {
+    "descripcion": ("ARTICULO", "DESCRIPCION", "NOMBRE"),
+    "almacen": ("ALMACEN",),
+    "um": ("UM", "UNIDAD DE MEDIDA", "U.M."),
+    "stock": ("STOCK",),
+    "predespacho": ("PREDESPACHO", "COMPROMISO", "PEDIDO"),
+    "disponible": ("DISPONIBLE",),
+}
+
+COLUMNAS_OBLIGATORIAS: tuple[str, ...] = (
+    "descripcion",
+    "almacen",
+    "um",
+    "stock",
+    "predespacho",
+)
+
+# Cuantas filas se recorren buscando el encabezado. El reporte real lo tiene
+# en la fila 10; 60 da margen a un preambulo mas largo sin leer media hoja.
+MAX_FILAS_BUSQUEDA: int = 60
+
 # Columnas donde aparecen los headers de categoria (LINEA, GRUPO, TIPO, FAMILIA)
 # Reporte resumido: cols 3, 6, 8, 11
 # Reporte completo (appweb): col 1

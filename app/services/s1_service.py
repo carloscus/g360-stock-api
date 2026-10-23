@@ -337,7 +337,7 @@ class ServicioStock:
             sku=sku.upper(),
             descripcion=cat.get("nombre", ""),
             um=cat.get("um", ""),
-            linea=linea,
+            linea=_linea_display(linea_id, cat.get("linea_nombre", "")),
             grupo=cat.get("grupo", ""),
             tipo=cat.get("tipo", ""),
             familia=cat.get("familia", ""),

@@ -7,7 +7,7 @@
 
 > API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.6.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.7.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)](https://fastapi.tiangolo.com/)

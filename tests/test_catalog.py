@@ -482,16 +482,23 @@ class TestLineaCodigo:
                     "05001": {
                         "sku": "05001",
                         "nombre": "ARCHIVO A4",
-                        "linea": "ARCHIVO",
+                        "linea": "78",
+                        "linea_nombre": "ARCHIVO",
                         "linea_codigo": "78",
                     },
-                    "01234": {"sku": "01234", "nombre": "BOLI", "linea": "PELOTAS"},
+                    "01234": {
+                        "sku": "01234",
+                        "nombre": "BOLI",
+                        "linea": "01",
+                        "linea_nombre": "PELOTAS",
+                    },
                 }
             )
             archivo = servicio_stock._item_desde_catalogo("05001")
             pelota = servicio_stock._item_desde_catalogo("01234")
             assert archivo is not None and archivo.linea_id == "78"
-            assert archivo.linea == "ARCHIVO"
+            # linea_display: codigo + nombre legible
+            assert archivo.linea == "78 - ARCHIVO"
             # Sin linea_codigo: heurístico sku[:2]
             assert pelota is not None and pelota.linea_id == "01"
         finally:

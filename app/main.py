@@ -35,7 +35,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     Esta implementacion es autocontenida y no depende de introspeccion de rutas.
     """
 
-    def __init__(self, app: ASGIApp, limite: str = "60/minute", global_limite: str = "150/minute"):
+    def __init__(
+        self, app: ASGIApp, limite: str = "60/minute", global_limite: str = "150/minute"
+    ):
         super().__init__(app)
         self._max, self._ventana = self._parsear_limite(limite)
         self._global_max, self._global_ventana = self._parsear_limite(global_limite)
@@ -72,9 +74,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return xr.strip()
         return request.client.host if request.client else "unknown"
 
-    async def dispatch(
-        self, request: StarletteRequest, call_next
-    ) -> StarletteResponse:
+    async def dispatch(self, request: StarletteRequest, call_next) -> StarletteResponse:
         path = request.url.path
         if any(path.startswith(exenta) for exenta in _RUTAS_EXENTAS_RATE_LIMIT):
             return await call_next(request)
@@ -103,7 +103,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 self._ventanas[ip] = (inicio, conteo)
                 if len(self._ventanas) > 10_000:
                     self._ventanas = {
-                        k: v for k, v in self._ventanas.items()
+                        k: v
+                        for k, v in self._ventanas.items()
                         if ahora - v[0] < self._ventana
                     }
                 if conteo > self._max:
@@ -149,8 +150,11 @@ async def lifespan(app: FastAPI):
                 catalog_service.cargar_desde_url, settings.catalogo_raw_url
             )
             if resultado.get("ok"):
-                logger.info("Catalogo auto-cargado: %s SKUs", resultado.get("total_skus"))
+                logger.info(
+                    "Catalogo auto-cargado: %s SKUs", resultado.get("total_skus")
+                )
                 from app.services.s1_service import servicio_stock
+
                 servicio_stock.re_enriquecer()
             else:
                 logger.warning("Auto-carga fallo: %s", resultado.get("error"))
@@ -167,7 +171,7 @@ app = FastAPI(
     "del cliente, los transforma y sirve enriquecidos con catálogo maestro. "
     "Provee acceso estructurado al stock, predespacho y disponible "
     "por producto y almacen para el ecosistema G360.",
-    version="1.6.0",
+    version="1.7.0",
     contact={
         "name": "G360 - CIPSA",
         "url": "https://github.com/carloscus",
@@ -184,6 +188,7 @@ app.add_middleware(
     global_limite=settings.global_rate_limit,
 )
 
+
 # ── Request logging + timeout ───────────────────────────────────────
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
@@ -193,9 +198,17 @@ async def request_logging_middleware(request: Request, call_next):
     client = request.client.host if request.client else "unknown"
 
     try:
-        response = await asyncio.wait_for(call_next(request), timeout=settings.request_timeout)
+        response = await asyncio.wait_for(
+            call_next(request), timeout=settings.request_timeout
+        )
     except asyncio.TimeoutError:
-        logger.warning("TIMEOUT %s %s (%ds) from %s", method, path, settings.request_timeout, client)
+        logger.warning(
+            "TIMEOUT %s %s (%ds) from %s",
+            method,
+            path,
+            settings.request_timeout,
+            client,
+        )
         return JSONResponse(
             status_code=504,
             content={"detail": "Request timeout"},
@@ -205,7 +218,9 @@ async def request_logging_middleware(request: Request, call_next):
         raise
 
     elapsed = time.perf_counter() - start
-    logger.info("%s %s %d %.3fs %s", method, path, response.status_code, elapsed, client)
+    logger.info(
+        "%s %s %d %.3fs %s", method, path, response.status_code, elapsed, client
+    )
     return response
 
 

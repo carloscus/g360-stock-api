@@ -180,12 +180,23 @@ def detectar_columna_categoria(filas: list[list]) -> int | None:
     columnas distintas. Buscarla evita perder toda la taxonomia en silencio
     (linea/grupo/tipo/familia vacios, y con eso el catalogo de los SKU que
     solo existen en S1).
+
+    Se elige la columna con MAS filas de categoria, no la primera que
+    aparece: el reporte trae una fila de filtros (LINEA/GRUPO/TIPO/FAMILIA
+    en una sola fila, a veces en otra columna) que no es un encabezado
+    real. Los encabezados de verdad se repiten por grupo y siempre ganan
+    por cantidad. Tomar solo la primera coincidencia elegia la columna del
+    filtro y dejaba todo el reporte con linea='TODOS' (que el
+    enriquecimiento despues blanquea a '').
     """
-    for fila in filas[:MAX_FILAS_BUSQUEDA]:
+    conteo: dict[int, int] = {}
+    for fila in filas:
         for i, valor in enumerate(fila):
             if _es_fila_categoria(str(valor or "").strip()):
-                return i
-    return None
+                conteo[i] = conteo.get(i, 0) + 1
+    if not conteo:
+        return None
+    return max(conteo, key=lambda i: (conteo[i], -i))
 
 
 def parsear_stock_desde_xls(

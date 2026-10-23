@@ -197,6 +197,17 @@ class TestDetectarColumnaCategoria:
     def test_categoria_desplazada(self):
         assert detectar_columna_categoria(_reporte(desplazamiento=1)) == 2
 
+    def test_fila_de_filtros_no_distrae(self):
+        # El reporte real mezcla una fila de filtros (LINEA/GRUPO/TODO en una
+        # sola fila, en otra columna) con los encabezados de verdad (uno por
+        # fila, repetidos por grupo). Gana la columna con mas filas.
+        filas = _reporte()
+        filtro = _fila()
+        filtro[3] = "LINEA: TODOS"
+        filtro[6] = "GRUPO: TODOS"
+        filas.insert(5, filtro)
+        assert detectar_columna_categoria(filas) == 1
+
     def test_sin_categorias(self):
         prefijos = ("LINEA:", "GRUPO:", "TIPO:", "FAMILIA:")
         filas = [

@@ -27,6 +27,7 @@ pip install -r requirements.lock
 
 ## Estructura
 
+- `src/`
 - `app/`
 - `tests/`
 - `data/`

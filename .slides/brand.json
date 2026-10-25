@@ -1,0 +1,45 @@
+{
+  "fonts": {
+    "body": "Inter",
+    "heading": "Outfit"
+  },
+  "fidelity": "brand",
+  "tokens": {
+    "shape": {
+      "hairline_pt": 1,
+      "corner": "rounded"
+    },
+    "type_scale": {
+      "caption": 16,
+      "title": 60,
+      "body": 24,
+      "display": 96,
+      "h1": 40
+    },
+    "colour_roles": {
+      "accent": "#0F172A",
+      "paper": "#FFFFFF",
+      "muted": "#F8FAFC",
+      "ink": "#000000"
+    },
+    "grid": {
+      "margin_top": 548640,
+      "columns": 12,
+      "gutter": 203606,
+      "baseline": 91211,
+      "margin_bottom": 548640,
+      "margin_x": 609600
+    }
+  },
+  "template": "template.pptx",
+  "colours": {
+    "accent6": "#DC2626",
+    "accent5": "#64748B",
+    "ink": "#000000",
+    "accent2": "#F8FAFC",
+    "accent4": "#475569",
+    "accent": "#0F172A",
+    "paper": "#FFFFFF",
+    "accent3": "#FFFFFF"
+  }
+}

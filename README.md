@@ -22,7 +22,7 @@ flowchart TD
     subgraph API["g360-stock-api"]
         CACHE1["stock_cache.json<br/>general: VES, 40, 92..."]
         CACHE2["stock_cache_sucursales.json<br/>S1, S2, S3..."]
-        CAT_CACHE["catalog_cache.json<br/>2393 SKUs"]
+        CAT_CACHE["catalog_cache.json<br/>3553 SKUs"]
         ENRICH["enriquecimiento<br/>al cachear, no por request"]
         MERGE["_merge_items_por_sku<br/>sin duplicados"]
     end
@@ -293,7 +293,7 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 - **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
-Campos usados: `sku`, `linea`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `categoria_venta`, `um`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades")
+Campos usados: `sku`, `linea`, `linea_nombre`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `categoria_venta`, `um`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades"). LaUM se integra desde KARDEX_BASE.xlsx (97.9% cobertura).
 
 ---
 

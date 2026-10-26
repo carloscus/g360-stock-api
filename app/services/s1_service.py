@@ -940,6 +940,18 @@ class ServicioStock:
     def _transformar_items(
         datos: dict[str, dict[str, dict]],
     ) -> list[ItemStock]:
+        """Transforma los datos crudos del reporte en items estandarizados."""
+        # Obtener nombres de almacenes desde catalogo si hay
+        catalog_nombres = {}
+        try:
+            from app.services.catalog_service import catalog_service
+
+            catalog_nombres = catalog_service._meta.get("almacenes", {}).get(
+                "nombres", {}
+            )
+        except (AttributeError, TypeError, ImportError):
+            pass
+
         skus_unicos: dict[str, dict] = {}
         for almacen, productos in datos.items():
             tipo_alm = _tipo_almacen(almacen)
@@ -965,14 +977,14 @@ class ServicioStock:
                     "stock": info.get("stock", 0) or 0,
                     "predespacho": info.get("predespacho", 0) or 0,
                     "tipo": tipo_alm,
-                    "nombre": obtener_nombre_almacen(almacen, {}),
+                    "nombre": obtener_nombre_almacen(almacen, catalog_nombres),
                 }
         items = []
         for sku, data in sorted(skus_unicos.items()):
             almacenes_lista = [
                 AlmacenStock(
                     almacen=alm,
-                    nombre=obtener_nombre_almacen(alm, {}),
+                    nombre=obtener_nombre_almacen(alm, catalog_nombres),
                     tipo=val["tipo"],
                     stock=val["stock"],
                     predespacho=val["predespacho"],

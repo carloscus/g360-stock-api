@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class AlmacenStock(BaseModel):
     almacen: str = Field(..., description="Codigo del almacen")
+    nombre: str = Field(default="", description="Nombre descriptivo del almacen")
     tipo: str = Field(default="venta", description="Tipo de almacen: venta, mktd")
     disponible: int = Field(
         ..., ge=0, description="Stock disponible (stock - predespacho)"

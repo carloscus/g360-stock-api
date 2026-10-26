@@ -60,6 +60,28 @@ ENCABEZADOS_HTTP: dict[str, str] = {
 }
 
 ALMACEN_PRINCIPAL: str = "VES"
+ALMACEN_NOMBRES: dict[str, str] = {
+    "VES": "Centro Logistico",
+    "40": "Productos Terminados",
+    "92": "Productos Terminados B",
+    "106": " productos Terminados C",
+    "121": "Inspeccion Calidad",
+    "122": "Devoluciones",
+    "129": "Producto Terminado D",
+    "118": "Marketing",
+    "S1": "Sucursal 1",
+    "S2": "Sucursal 2",
+    "S3": "Sucursal 3",
+    "S5": "Sucursal 5",
+    "S6": "Sucursal 6",
+    "S9": "Sucursal 9",
+    "S11": "Sucursal 11",
+    "S13": "Sucursal 13",
+    "S14": "Sucursal 14",
+    "S15": "Sucursal 15",
+    "S16": "Sucursal 16",
+    "S17": "Sucursal 17",
+}
 
 ALMACENES_MKTD: set[str] = {"118"}
 # S* (sucursales) se detectan por prefijo "S" y son mktd

@@ -189,6 +189,18 @@ app.add_middleware(
 )
 
 
+# ── UTF-8 charset middleware ────────────────────────────────────────
+@app.middleware("http")
+async def charset_middleware(request: Request, call_next):
+    """Asegura que las respuestas JSON tengan charset=utf-8 explícito."""
+    response = await call_next(request)
+    if "content-type" in response.headers:
+        ct = response.headers["content-type"]
+        if "application/json" in ct and "charset" not in ct:
+            response.headers["content-type"] = ct + "; charset=utf-8"
+    return response
+
+
 # ── Request logging + timeout ───────────────────────────────────────
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):

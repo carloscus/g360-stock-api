@@ -420,7 +420,12 @@ class ServicioStock:
                 almacenes_vistos[alm.almacen] = almacenes_vistos.get(alm.almacen, 0) + 1
         resultado = sorted(
             [
-                {"almacen": k, "total_skus": v, "tipo": _tipo_almacen(k)}
+                {
+                    "almacen": k,
+                    "nombre": ALMACEN_NOMBRES.get(k, k),
+                    "total_skus": v,
+                    "tipo": _tipo_almacen(k),
+                }
                 for k, v in almacenes_vistos.items()
             ],
             key=lambda x: (0 if x["almacen"] == ALMACEN_PRINCIPAL else 1, x["almacen"]),
@@ -950,12 +955,14 @@ class ServicioStock:
                     "stock": info.get("stock", 0) or 0,
                     "predespacho": info.get("predespacho", 0) or 0,
                     "tipo": tipo_alm,
+                    "nombre": ALMACEN_NOMBRES.get(almacen, almacen),
                 }
         items = []
         for sku, data in sorted(skus_unicos.items()):
             almacenes_lista = [
                 AlmacenStock(
                     almacen=alm,
+                    nombre=val.get("nombre", ALMACEN_NOMBRES.get(alm, alm)),
                     tipo=val["tipo"],
                     stock=val["stock"],
                     predespacho=val["predespacho"],

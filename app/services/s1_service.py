@@ -18,6 +18,7 @@ from app.core.constants import (
     ENCABEZADOS_HTTP,
     ALMACEN_PRINCIPAL,
     ALMACENES_MKTD,
+    ALMACEN_NOMBRES,
     asignar_categoria,
     categoria_venta,
 )

@@ -121,6 +121,9 @@ headers = {'X-API-Key': API_KEY}
 # Stock de sucursales
 r = requests.get(f'{BASE_URL}/stock?almacen=S5', headers=headers)
 print(r.json())
+
+# Nota: cada almacen incluye 'nombre' con el nombre descriptivo
+# Ejemplo: {"almacen": "S11", "nombre": "ALMACEN SUCURSAL CAJAMARCA", ...}
 ```
 
 ---
@@ -148,8 +151,8 @@ print(r.json())
   "linea": "02 - FORROS",
   "categoria": "VINIFAN",
   "almacenes": [
-    {"almacen": "VES", "stock": 63400, "disponible": 63400},
-    {"almacen": "40", "stock": 7000, "disponible": 7000}
+    {"almacen": "VES", "nombre": "CENTRO LOGISTICO VES", "stock": 63400, "disponible": 63400},
+    {"almacen": "40", "nombre": "ALMACEN PROD. TERMINADOS", "stock": 7000, "disponible": 7000}
   ],
   "precio": 10.25,
   "ean13": "7754807020015",
@@ -158,6 +161,10 @@ print(r.json())
   "sin_stock": false
 }
 ```
+
+> **Nota:** Cada almacén incluye el campo `nombre` con el nombre descriptivo
+> (ej: "ALMACEN SUCURSAL CAJAMARCA"). Si no hay nombre disponible, se retorna
+> el mismo ID del almacén.
 
 ### ¿Qué significa el flag `sin_stock`?
 
@@ -204,6 +211,77 @@ Leer los tres estados:
 
 ---
 
-**API version:** 1.6.0  
+## Para nuevas apps consumidoras
+
+### 1. Obtener API Key
+
+Consulta con el equipo de sistemas para recibir tu clave de acceso. La key se configura en:
+- Variables de entorno: `G360_S1_API_KEY`
+- Config local: `.env` o settings del proyecto
+
+### 2. Patrones recomendados
+
+```python
+# patron 1: Consulta por SKU (ficha completa)
+GET /api/v1/stock/{sku}
+
+# patron 2: Filtro por almacén específico
+GET /api/v1/stock?almacen=S5&limit=100
+
+# patron 3: Universo consolidado (una fila por SKU)
+GET /api/v1/stock/skus?fuente=todas&solo_con_movimiento=true
+
+# patron 4: Verificar estado del servicio
+GET /api/v1/health  # sin API key requerida
+```
+
+### 3. Manejo de errores
+
+| Código | Significado | Acción |
+|--------|-------------|--------|
+| 200 | OK | Datos válidos |
+| 403 | Key inválida | Verificar X-API-Key |
+| 404 | SKU no existe | Verificar en catálogo maestro |
+| 429 | Rate limit | Esperar y reintentar |
+| 504 | Timeout | Verificar health, reintentar |
+
+### 4. Cache local sugerido
+
+Para reducir llamadas al API, recomenda cachear respuestas:
+- SKU individual: TTL 10 min
+- Listados: TTL 5 min
+- Health: TTL 1 min
+
+### 5. Ejemplo completo
+
+```python
+import requests
+import time
+from functools import lru_cache
+
+API_KEY = "tu-api-key"
+BASE_URL = "https://g360-stock-api.onrender.com/api/v1"
+
+@lru_cache(maxsize=1000)
+def get_stock(sku: str, cache_time: int = 600):
+    """Obtiene stock de un SKU con cache local."""
+    headers = {"X-API-Key": API_KEY}
+    r = requests.get(f"{BASE_URL}/stock/{sku}", headers=headers, timeout=30)
+    if r.status_code == 200:
+        return r.json()
+    return None
+
+# Uso
+sku_data = get_stock("011019")
+if sku_data:
+    print(f"SKU: {sku_data['sku']}")
+    print(f"Linea: {sku_data['linea']}")
+    for alm in sku_data.get('almacenes', []):
+        print(f"  {alm['nombre']}: {alm['disponible']} disp")
+```
+
+---
+
+**API version:** 1.7.0  
 **Repositorio:** https://github.com/carloscus/g360-stock-api  
 **Swagger docs:** https://g360-stock-api.onrender.com/docs

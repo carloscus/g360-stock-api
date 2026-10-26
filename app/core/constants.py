@@ -60,32 +60,40 @@ ENCABEZADOS_HTTP: dict[str, str] = {
 }
 
 ALMACEN_PRINCIPAL: str = "VES"
-ALMACEN_NOMBRES: dict[str, str] = {
-    "VES": "Centro Logistico",
-    "40": "Productos Terminados",
-    "92": "Productos Terminados B",
-    "106": " productos Terminados C",
-    "121": "Inspeccion Calidad",
-    "122": "Devoluciones",
-    "129": "Producto Terminado D",
-    "118": "Marketing",
-    "S1": "Sucursal 1",
-    "S2": "Sucursal 2",
-    "S3": "Sucursal 3",
-    "S5": "Sucursal 5",
-    "S6": "Sucursal 6",
-    "S9": "Sucursal 9",
-    "S11": "Sucursal 11",
-    "S13": "Sucursal 13",
-    "S14": "Sucursal 14",
-    "S15": "Sucursal 15",
-    "S16": "Sucursal 16",
-    "S17": "Sucursal 17",
-}
-
 ALMACENES_MKTD: set[str] = {"118"}
 # S* (sucursales) se detectan por prefijo "S" y son mktd
 # Todo lo demas es venta
+
+
+def obtener_nombre_almacen(codigo: str, catalog_nombres: dict | None = None) -> str:
+    """Obtiene el nombre descriptivo de un almacen.
+
+    Prioridad:
+    1. Mapa del catalogo maestro (metadata.almacenes.nombres)
+    2. Default genérico por tipo
+    """
+    if catalog_nombres and codigo in catalog_nombres:
+        nombre = catalog_nombres[codigo]
+        return nombre if nombre else codigo
+
+    # Defaults por defecto
+    defaults = {
+        "VES": "Centro Logistico",
+        "40": "Productos Terminados",
+        "92": "Productos Terminados B",
+        "106": "Productos Terminados C",
+        "121": "Inspeccion Calidad",
+        "122": "Devoluciones",
+        "129": "Producto Terminado D",
+        "118": "Marketing",
+    }
+    if codigo in defaults:
+        return defaults[codigo]
+    if codigo.startswith("S"):
+        num = codigo[1:]
+        return f"Sucursal {num}"
+    return codigo
+
 
 # ── Categorias de negocio ─────────────────────────────────────────────
 # Lineas explicitas asignadas a cada categoria.

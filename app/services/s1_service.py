@@ -18,7 +18,7 @@ from app.core.constants import (
     ENCABEZADOS_HTTP,
     ALMACEN_PRINCIPAL,
     ALMACENES_MKTD,
-    ALMACEN_NOMBRES,
+    obtener_nombre_almacen,
     asignar_categoria,
     categoria_venta,
 )
@@ -419,11 +419,22 @@ class ServicioStock:
         for item in self._items_sucursales:
             for alm in item.almacenes:
                 almacenes_vistos[alm.almacen] = almacenes_vistos.get(alm.almacen, 0) + 1
+        # Obtener nombres de almacenes desde catalogo si hay
+        catalog_nombres = {}
+        try:
+            catalog_nombres = (
+                catalog_service._catalog.get("metadata", {})
+                .get("almacenes", {})
+                .get("nombres", {})
+            )
+        except (AttributeError, TypeError):
+            pass
+
         resultado = sorted(
             [
                 {
                     "almacen": k,
-                    "nombre": ALMACEN_NOMBRES.get(k, k),
+                    "nombre": obtener_nombre_almacen(k, catalog_nombres),
                     "total_skus": v,
                     "tipo": _tipo_almacen(k),
                 }
@@ -956,14 +967,14 @@ class ServicioStock:
                     "stock": info.get("stock", 0) or 0,
                     "predespacho": info.get("predespacho", 0) or 0,
                     "tipo": tipo_alm,
-                    "nombre": ALMACEN_NOMBRES.get(almacen, almacen),
+                    "nombre": obtener_nombre_almacen(almacen, {}),
                 }
         items = []
         for sku, data in sorted(skus_unicos.items()):
             almacenes_lista = [
                 AlmacenStock(
                     almacen=alm,
-                    nombre=val.get("nombre", ALMACEN_NOMBRES.get(alm, alm)),
+                    nombre=obtener_nombre_almacen(alm, {}),
                     tipo=val["tipo"],
                     stock=val["stock"],
                     predespacho=val["predespacho"],

@@ -262,6 +262,23 @@ Después de 5 min:
 | `venta` | VES, 40, 92, 106, 121, 122, 129 |
 | `mktd` | 118, S1, S2, S3, S5, S6, S9, S11, S13, S14, S15, S16, S17 |
 
+## Nombres de almacenes
+
+Los nombres descriptivos de almacenes vienen del **catálogo maestro** (`metadata.almacenes.nombres`). Si un almacén no tiene nombre en el catálogo, se muestra el ID como fallback.
+
+| ID | Nombre |
+|----|--------|
+| `VES` | CENTRO LOGISTICO VES |
+| `40` | ALMACEN PROD. TERMINADOS |
+| `118` | ALMACEN MARKETING |
+| `S1` | ALMACEN SUCURSAL TRUJILLO |
+| `S11` | ALMACEN SUCURSAL CAJAMARCA |
+| `S13` | ALMACEN SUCURSAL PUCALLPA |
+| `S5` | ALMACEN SUCURSAL HUANCAYO |
+| ... | ... (ver catálogo maestro completo) |
+
+Para agregar o modificar nombres, editar `config/almacenes.json` en `g360-master-data` y regenerar el catálogo.
+
 ---
 
 ## Fuentes de datos

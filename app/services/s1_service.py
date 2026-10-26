@@ -422,10 +422,8 @@ class ServicioStock:
         # Obtener nombres de almacenes desde catalogo si hay
         catalog_nombres = {}
         try:
-            catalog_nombres = (
-                catalog_service._catalog.get("metadata", {})
-                .get("almacenes", {})
-                .get("nombres", {})
+            catalog_nombres = catalog_service._meta.get("almacenes", {}).get(
+                "nombres", {}
             )
         except (AttributeError, TypeError):
             pass

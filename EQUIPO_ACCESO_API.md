@@ -1,5 +1,17 @@
 # G360 Stock API — Acceso para el equipo
 
+## Tabla de campos nuevos (v1.8.0)
+
+| Campo | Type | Ejemplo | Descripción |
+|-------|------|---------|-------------|
+| `um_nombre` | string | `"UNIDAD"` | Nombre legible de la UM (UND→UNIDAD, BST→BLISTER, BLS→BOLSAS, etc.) |
+| `linea_id` | string/null | `"01"` | Código corto de línea (sin prefijo) |
+| `grupo_id` | string/null | `"01"` | Código corto de grupo |
+| `tipo_id` | string/null | `"02"` | Código corto de tipo |
+| `familia_id` | string/null | `"01"` | Código corto de familia |
+
+> Todos los campos tienen default seguro (`""` o `null`). Los clientes existentes que no los usan siguen funcionando sin cambios.
+
 ## URL base
 ```
 https://g360-stock-api.onrender.com/api/v1/stock
@@ -142,25 +154,39 @@ print(r.json())
 
 ---
 
-## Respuesta típica (SKU 02217)
+## Respuesta típica (SKU 011019)
 
 ```json
 {
-  "sku": "02217",
-  "descripcion": "FORRO N VINIFAN OFICIO CRISTAL 27",
-  "linea": "02 - FORROS",
-  "categoria": "VINIFAN",
+  "sku": "011019",
+  "descripcion": "SEMIDEPORTIVA FUTBOL CRACKCITO",
+  "um": "UND",
+  "um_nombre": "UNIDAD",
+  "linea": "01 - PELOTAS",
+  "linea_id": "01",
+  "grupo": "NACIONAL",
+  "grupo_id": "01",
+  "tipo": "SEMI-DEPORTIVA",
+  "tipo_id": "02",
+  "familia": "FUTBOL",
+  "familia_id": "01",
+  "categoria": "VINIBALL",
+  "categoria_venta": "VINIBALL",
   "almacenes": [
-    {"almacen": "VES", "nombre": "CENTRO LOGISTICO VES", "stock": 63400, "disponible": 63400},
-    {"almacen": "40", "nombre": "ALMACEN PROD. TERMINADOS", "stock": 7000, "disponible": 7000}
+    {"almacen": "VES", "nombre": "Centro Logistico", "stock": 120, "disponible": 120},
+    {"almacen": "40", "nombre": "Productos Terminados", "stock": 50, "disponible": 50}
   ],
-  "precio": 10.25,
-  "ean13": "7754807020015",
-  "un_bx": 25,
+  "precio": 45.00,
+  "un_bx": 1,
+  "ean13": "7754807011019",
   "sin_catalogo": false,
-  "sin_stock": false
+  "sin_stock": false,
+  "cotizable": true,
+  "revision": ""
 }
 ```
+
+> **Campos nuevos v1.8.0:** `um_nombre` (nombre legible de UM), `linea_id`/`grupo_id`/`tipo_id`/`familia_id` (códigos cortos). El frontend ya usa `linea_id` para segmentación por línea.
 
 > **Nota:** Cada almacén incluye el campo `nombre` con el nombre descriptivo
 > (ej: "ALMACEN SUCURSAL CAJAMARCA"). Si no hay nombre disponible, se retorna
@@ -174,7 +200,13 @@ Consulta un SKU que todavía no aparece en el reporte de stock pero existe en el
 ```json
 {
   "sku": "76250",
-  "linea": "ESCRITURA",
+  "descripcion": "BOLIGRAFO VINIFAN TRIFAN 32 M NEGRO DISPLAY X50",
+  "linea": "78 - ARCHIVO",
+  "linea_id": "78",
+  "um": "UND",
+  "um_nombre": "UNIDAD",
+  "grupo": "BOLIGRAFO",
+  "grupo_id": "02",
   "un_bx": 28,
   "precio": 17.77,
   "sin_catalogo": false,
@@ -282,6 +314,6 @@ if sku_data:
 
 ---
 
-**API version:** 1.7.0  
+**API version:** 1.8.0  
 **Repositorio:** https://github.com/carloscus/g360-stock-api  
 **Swagger docs:** https://g360-stock-api.onrender.com/docs

@@ -7,7 +7,7 @@
 
 > API REST para datos de stock. Procesa reportes desde la fuente del cliente, los transforma y sirve enriquecidos con catálogo maestro.
 
-[![Version](https://img.shields.io/badge/version-1.7.0-blue)](https://github.com)
+[![Version](https://img.shields.io/badge/version-1.8.0-blue)](https://github.com)
 [![Skill](https://img.shields.io/badge/skill-cipsa-green)](https://github.com/carloscus/g360-cli)
 [![Python](https://img.shields.io/badge/python-3.10+-blue)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green)](https://fastapi.tiangolo.com/)
@@ -22,7 +22,7 @@ flowchart TD
     subgraph API["g360-stock-api"]
         CACHE1["stock_cache.json<br/>general: VES, 40, 92..."]
         CACHE2["stock_cache_sucursales.json<br/>S1, S2, S3..."]
-        CAT_CACHE["catalog_cache.json<br/>3553 SKUs"]
+        CAT_CACHE["catalog_cache.json<br/>3550 SKUs"]
         ENRICH["enriquecimiento<br/>al cachear, no por request"]
         MERGE["_merge_items_por_sku<br/>sin duplicados"]
     end
@@ -139,10 +139,11 @@ sequenceDiagram
 | `fuente` | string | `general` | `general`, `sucursales`, `todas` |
 | `solo_con_movimiento` | bool | `true` | Omite SKUs sin stock y sin compromiso |
 
-Devuelve, por SKU: `descripcion`, `um`, `linea`, `linea_id`, `grupo`, `tipo`,
-`familia`, `categoria`, `categoria_venta`, `stock`, `predespacho`,
-`disponible` y `sin_catalogo`. El payload es ~8 veces más chico que `/stock`
-(el mismo SKU no se repite por almacén).
+Devuelve, por SKU: `descripcion`, `um`, `um_nombre`, `linea`, `linea_id`, `grupo`,
+`grupo_id`, `tipo`, `tipo_id`, `familia`, `familia_id`, `categoria`,
+`categoria_venta`, `stock`, `predespacho`, `disponible` y `sin_catalogo`. El
+payload es ~8 veces más chico que `/stock` (el mismo SKU no se repite por
+almacén).
 
 ### Flags de negocio
 
@@ -310,7 +311,7 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 - **Reintentos** — 3 intentos con backoff (2s, 4s) ante errores de red/timeout/5xx del servidor GitHub; los errores 4xx no se reintentan
 - **TTL** — 6 horas (21600s)
 
-Campos usados: `sku`, `linea`, `linea_nombre`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `tipo`, `familia`, `categoria`, `categoria_venta`, `um`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades"). LaUM se integra desde KARDEX_BASE.xlsx (97.9% cobertura).
+Campos usados: `sku`, `linea`, `linea_nombre`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `grupo_id`, `tipo`, `tipo_id`, `familia`, `familia_id`, `categoria`, `categoria_venta`, `um`, `um_nombre`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades"). La UM se integra desde KARDEX_BASE.xlsx (97.9% cobertura).
 
 ---
 

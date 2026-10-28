@@ -22,3 +22,11 @@ services:
       - key: S1_CATALOGO_TTL_SEGUNDOS
         value: "21600"
     healthCheckPath: /api/v1/health
+
+# Cron para mantener el dyno activo y evitar el cold start por sleep.
+# Render duerme el dyno tras 15 min de inactividad; pinguear cada 14 min
+# mantiene el servicio caliente. Es gratis en el plan free.
+crons:
+  - name: stock-ping
+    schedule: "*/14 * * * *"
+    command: curl -sf https://g360-stock-api.onrender.com/api/v1/health

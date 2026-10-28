@@ -65,6 +65,44 @@ ALMACENES_MKTD: set[str] = {"118"}
 # Todo lo demas es venta
 
 
+# Mapa de unidades de medida a nombres descriptivos
+UM_NOMBRES: dict[str, str] = {
+    "UND": "UNIDAD",
+    "UN": "UNIDAD",
+    "U": "UNIDAD",
+    "KGR": "KILOGRAMO",
+    "KG": "KILOGRAMO",
+    "GR": "GRAMO",
+    "LIT": "LITRO",
+    "LT": "LITRO",
+    "MTR": "METRO",
+    "MT": "METRO",
+    "ROL": "ROLLO",
+    "RLL": "ROLLO",
+    "BLS": "BOLSAS",
+    "BL": "BLISTER",
+    "BST": "BLISTER",
+    "DIS": "DISPLAY",
+    "EST": "ESTUCHE",
+    "PAQ": "PAQUETE",
+    "CJ": "CAJA",
+    "BX": "CAJA",
+    "CJA": "CAJA",
+    "CJT": "CAJITA",
+    "PAR": "PAR",
+    "SET": "JUEGO",
+    "JGO": "JUEGO",
+    "MLL": "MILLAR",
+    "MIL": "MILLAR",
+}
+
+
+def obtener_nombre_um(codigo: str) -> str:
+    if not codigo:
+        return ""
+    return UM_NOMBRES.get(codigo.strip().upper(), codigo.strip().upper())
+
+
 def obtener_nombre_almacen(codigo: str, catalog_nombres: dict | None = None) -> str:
     """Obtiene el nombre descriptivo de un almacen.
 

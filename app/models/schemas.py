@@ -25,12 +25,21 @@ class ItemStock(BaseModel):
         default="", description="Nombre o descripcion del producto"
     )
     um: str = Field(default="", description="Unidad de medida (UND, BST, KGR, etc.)")
+    um_nombre: str = Field(
+        default="", description="Nombre descriptivo de unidad de medida"
+    )
     linea: str = Field(
         default="", description="Linea de producto (formato: '01 - PELOTAS')"
     )
+    linea_id: Optional[str] = Field(
+        None, description="Short line identifier (e.g. '01', 'AD', '78')"
+    )
     grupo: str = Field(default="", description="Grupo de producto")
+    grupo_id: Optional[str] = Field(None, description="Short group identifier")
     tipo: str = Field(default="", description="Tipo de producto")
+    tipo_id: Optional[str] = Field(None, description="Short type identifier")
     familia: str = Field(default="", description="Familia de producto")
+    familia_id: Optional[str] = Field(None, description="Short family identifier")
     categoria: str = Field(
         default="",
         description="Categoria de negocio (VINIBALL, VINIFAN, REPRESENTADAS)",
@@ -38,9 +47,6 @@ class ItemStock(BaseModel):
     almacenes: list[AlmacenStock] = Field(default_factory=list)
     estado_linea: str = Field(
         default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO)"
-    )
-    linea_id: Optional[str] = Field(
-        None, description="Short line identifier (e.g. '01', 'AD', '78')"
     )
     sin_catalogo: bool = Field(
         False, description="True si el producto no tiene datos de catalogo maestro"
@@ -133,6 +139,9 @@ class ItemStockCompact(BaseModel):
     sku: str = Field(..., description="Codigo unico del producto")
     descripcion: str = Field(default="", description="Nombre o descripcion")
     um: str = Field(default="", description="Unidad de medida")
+    um_nombre: str = Field(
+        default="", description="Nombre descriptivo de unidad de medida"
+    )
     linea: str = Field(
         default="", description="Linea con codigo y nombre (ej. '01 - PELOTAS')"
     )
@@ -140,8 +149,11 @@ class ItemStockCompact(BaseModel):
         None, description="Codigo corto de linea (ej. '01', 'CA')"
     )
     grupo: str = Field(default="", description="Grupo de producto")
+    grupo_id: Optional[str] = Field(None, description="Codigo corto de grupo")
     tipo: str = Field(default="", description="Tipo de producto")
+    tipo_id: Optional[str] = Field(None, description="Codigo corto de tipo")
     familia: str = Field(default="", description="Familia de producto")
+    familia_id: Optional[str] = Field(None, description="Codigo corto de familia")
     categoria: str = Field(default="", description="Categoria de negocio")
     categoria_venta: str = Field(default="", description="Semaforo de venta")
     stock: int = Field(0, ge=0, description="Stock fisico total (suma de almacenes)")

@@ -19,6 +19,7 @@ from app.core.constants import (
     ALMACEN_PRINCIPAL,
     ALMACENES_MKTD,
     obtener_nombre_almacen,
+    obtener_nombre_um,
     asignar_categoria,
     categoria_venta,
 )
@@ -185,6 +186,14 @@ def _nombre_sin_codigo(valor) -> str:
     return sin_codigo or txt
 
 
+def _extraer_id_display(valor) -> Optional[str]:
+    """'02 - FUTBOL' -> '02', 'FUTBOL' -> None, '' -> None."""
+    if not valor:
+        return None
+    m = re.match(r"^([0-9A-Z]{2,4})\s*-\s*", str(valor).strip())
+    return m.group(1).upper() if m else None
+
+
 def _flags_desde_catalogo(cat: Optional[dict]) -> dict:
     """Flags de negocio del item, tomados de la entrada del catalogo.
 
@@ -299,11 +308,17 @@ class ServicioStock:
     def obtener_sku_enriched(
         self, sku: str, fuente: str = "general"
     ) -> Optional[ItemStockEnriched]:
-        # Auto-detect: si la fuente es general pero el SKU existe en sucursales, usar todas
+        # Auto-detect: si la fuente es general pero el SKU existe en sucursales,
+        # usar todas. Primero verificamos el cache existente sin forzar refresh:
+        # si el SKU ya esta en sucursales cached, no necesitamos descargar nada.
         if fuente == "general":
-            self._refrescar_si_es_necesario("sucursales")
             if any(i.sku == sku for i in self._items_sucursales):
                 fuente = "todas"
+            elif any(i.sku == sku for i in self._items_general):
+                pass  # SKU ya esta en general, no hace falta refrescar
+            else:
+                # No esta en ningun cache: refrescar sucursales por si acaso
+                self._refrescar_si_es_necesario("sucursales")
         self._refrescar_si_es_necesario(fuente)
         items = self._obtener_enriched_segun_fuente(fuente)
         mapa = {i.sku: i for i in items}
@@ -338,14 +353,15 @@ class ServicioStock:
             sku=sku.upper(),
             descripcion=cat.get("nombre", ""),
             um=cat.get("um", ""),
+            um_nombre=obtener_nombre_um(cat.get("um", "")),
             linea=_linea_display(linea_id, cat.get("linea_nombre", "")),
+            linea_id=linea_id,
             grupo=cat.get("grupo", ""),
             tipo=cat.get("tipo", ""),
             familia=cat.get("familia", ""),
             categoria=cat.get("categoria", ""),
             almacenes=[],
             estado_linea=cat.get("estado_linea", ""),
-            linea_id=linea_id,
             sin_catalogo=False,
             un_bx=cat.get("un_bx", 1),
             peso_kg=cat.get("peso_kg", 0.0),
@@ -584,8 +600,11 @@ class ServicioStock:
                     cat.get("linea_nombre", "") or ""
                 ).strip() or cat_linea
                 cat_grupo = cat.get("grupo", "").strip()
+                cat_grupo_id = cat.get("grupo_id", "").strip() or None
                 cat_tipo = cat.get("tipo", "").strip()
+                cat_tipo_id = cat.get("tipo_id", "").strip() or None
                 cat_familia = cat.get("familia", "").strip()
+                cat_familia_id = cat.get("familia_id", "").strip() or None
                 cat_categoria = cat.get("categoria", "").strip()
 
                 display_linea = item.linea if item.linea not in _PLACEHOLDERS else ""
@@ -651,10 +670,15 @@ class ServicioStock:
                         sku=item.sku,
                         descripcion=item.descripcion,
                         um=item.um,
+                        um_nombre=obtener_nombre_um(item.um),
                         linea=display_linea,
+                        linea_id=linea_id,
                         grupo=display_grupo,
+                        grupo_id=cat_grupo_id or item.grupo_id,
                         tipo=display_tipo,
+                        tipo_id=cat_tipo_id or item.tipo_id,
                         familia=display_familia,
+                        familia_id=cat_familia_id or item.familia_id,
                         categoria=display_categoria,
                         un_bx=cat.get("un_bx", 1),
                         peso_kg=cat.get("peso_kg", 0.0),
@@ -665,7 +689,6 @@ class ServicioStock:
                         estado_linea=cat_estado_linea,
                         keywords=cat.get("keywords", []),
                         orden=cat.get("orden", sku_index.get(item.sku, 0)),
-                        linea_id=linea_id,
                         sin_catalogo=False,
                         descontinuado=bool(cat.get("descontinuado", False)),
                         almacenes=item.almacenes,
@@ -683,10 +706,15 @@ class ServicioStock:
                         sku=item.sku,
                         descripcion=item.descripcion,
                         um=item.um,
+                        um_nombre=obtener_nombre_um(item.um),
                         linea=display_linea,
+                        linea_id=linea_id,
                         grupo=item.grupo,
+                        grupo_id=item.grupo_id,
                         tipo=item.tipo,
+                        tipo_id=item.tipo_id,
                         familia=item.familia,
+                        familia_id=item.familia_id,
                         categoria=item.categoria,
                         un_bx=1,
                         peso_kg=0.0,
@@ -696,7 +724,6 @@ class ServicioStock:
                         ean14="",
                         keywords=[],
                         orden=0,
-                        linea_id=linea_id,
                         sin_catalogo=True,
                         almacenes=item.almacenes,
                         categoria_venta=cat_venta,
@@ -712,7 +739,6 @@ class ServicioStock:
     ) -> list[ItemStockEnriched]:
         """Mergea dos listas de items por SKU, combinando los almacenes de ambos.
         Crea copias de los items para evitar mutar los originales."""
-        import copy
 
         mapa: dict[str, ItemStockEnriched] = {}
         for item in items_a:
@@ -962,14 +988,18 @@ class ServicioStock:
                     skus_unicos[sku] = {
                         "descripcion": info.get("descripcion", ""),
                         "um": info.get("um", ""),
+                        "um_nombre": obtener_nombre_um(info.get("um", "")),
                         "linea": linea_norm,
                         "linea_id": _extraer_linea_id(linea_norm),
                         # Grupo/tipo/familia SIN el codigo ("03 - BORRADOR" ->
                         # "BORRADOR"): el catalogo los publica asi y antes
                         # /stock y /catalog mostraban el mismo campo distinto.
                         "grupo": _nombre_sin_codigo(info.get("grupo", "")),
+                        "grupo_id": _extraer_id_display(info.get("grupo", "")),
                         "tipo": _nombre_sin_codigo(info.get("tipo", "")),
+                        "tipo_id": _extraer_id_display(info.get("tipo", "")),
                         "familia": _nombre_sin_codigo(info.get("familia", "")),
+                        "familia_id": _extraer_id_display(info.get("familia", "")),
                         "categoria": _categoria_de_item(sku, linea_norm),
                         "almacenes": {},
                     }
@@ -1000,14 +1030,18 @@ class ServicioStock:
                     sku=sku,
                     descripcion=data["descripcion"],
                     um=data["um"],
+                    um_nombre=data["um_nombre"],
                     linea=data["linea"],
+                    linea_id=data["linea_id"],
                     grupo=data["grupo"],
+                    grupo_id=data["grupo_id"],
                     tipo=data["tipo"],
+                    tipo_id=data["tipo_id"],
                     familia=data["familia"],
+                    familia_id=data["familia_id"],
                     categoria=data["categoria"],
                     almacenes=almacenes_lista,
                     estado_linea="",
-                    linea_id=data["linea_id"],
                     sin_catalogo=False,
                 )
             )
@@ -1135,11 +1169,15 @@ class ServicioStock:
                     sku=item.sku,
                     descripcion=item.descripcion,
                     um=item.um,
+                    um_nombre=item.um_nombre,
                     linea=item.linea,
                     linea_id=item.linea_id,
                     grupo=item.grupo,
+                    grupo_id=item.grupo_id,
                     tipo=item.tipo,
+                    tipo_id=item.tipo_id,
                     familia=item.familia,
+                    familia_id=item.familia_id,
                     categoria=item.categoria,
                     categoria_venta=item.categoria_venta
                     or categoria_venta(item.categoria),

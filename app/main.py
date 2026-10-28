@@ -171,7 +171,7 @@ app = FastAPI(
     "del cliente, los transforma y sirve enriquecidos con catálogo maestro. "
     "Provee acceso estructurado al stock, predespacho y disponible "
     "por producto y almacen para el ecosistema G360.",
-    version="1.7.0",
+    version="1.8.0",
     contact={
         "name": "G360 - CIPSA",
         "url": "https://github.com/carloscus",

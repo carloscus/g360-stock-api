@@ -159,7 +159,7 @@ almacén).
 | `por_activar` | Está publicado pero sin precio (complementario de `cotizable`) |
 | `vigente` | El ERP no lo marca descontinuado |
 | `origen` | `erp` o `s1` (fuente de la ficha comercial) |
-| `derivado_de` | SKU base cuando es un derivado de la línea 98 |
+| `derivado_de` | Siempre vacío (reservado por compatibilidad; el API lo ignora) |
 | `revision` | Badge calculado: `sin_catalogo` → `por_activar` → `revision_venta` → `descontinuado` → `compromiso` → `""` |
 
 > El catálogo es el **allowlist** del API: un SKU con stock que no esté
@@ -190,7 +190,7 @@ almacén).
 ```
 GET /api/v1/stock?almacen=S5     → fuente=todas automáticamente
 GET /api/v1/stock/77145          → mergea almacenes si existe en sucursales
-GET /api/v1/stock?linea=ARCHIVO  → busca "02 - ARCHIVO" o "ARCHIVO"
+GET /api/v1/stock?linea=ARCHIVO  → busca "78 - ARCHIVO" o "ARCHIVO"
 ```
 
 ### Ejemplos típicos

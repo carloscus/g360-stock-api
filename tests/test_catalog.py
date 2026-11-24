@@ -1359,6 +1359,21 @@ class TestStockYCatalogoNoSeContradicen:
             self._limpiar()
 
 
+class TestPrefijo52Quitado:
+    """Quitar el prefijo ("52", "MATERIALES") no debe cambiar el exacto:
+    la linea "52" sigue siendo INDUMENTARIA y el prefijo ya no existe."""
+
+    def test_linea_52_sigue_si_indumentaria(self):
+        from app.core.constants import asignar_categoria
+
+        assert asignar_categoria("52") == "INDUMENTARIA"
+
+    def test_prefijo_52_materiales_ya_no_esta(self):
+        from app.core.constants import PREFIJOS_CATEGORIA_AUTO
+
+        assert ("52", "MATERIALES") not in PREFIJOS_CATEGORIA_AUTO
+
+
 class TestFlagsDeNegocio:
     """Flags que publica g360-master-data (v3.6.0) y que /stock debe propagar.
 

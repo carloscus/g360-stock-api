@@ -237,8 +237,11 @@ class CatalogoEntry(BaseModel):
     linea: str = Field(default="", description="Codigo de linea de producto (2 chars)")
     linea_nombre: str = Field(default="", description="Nombre legible de la linea")
     grupo: str = Field(default="", description="Grupo de producto")
+    grupo_id: Optional[str] = Field(None, description="Codigo corto de grupo")
     tipo: str = Field(default="", description="Tipo de producto")
+    tipo_id: Optional[str] = Field(None, description="Codigo corto de tipo")
     familia: str = Field(default="", description="Familia de producto")
+    familia_id: Optional[str] = Field(None, description="Codigo corto de familia")
     categoria: str = Field(default="", description="Categoria de negocio")
     estado_linea: str = Field(
         default="", description="Estado de linea (NACIONAL, IMPORTADO, NUEVO)"

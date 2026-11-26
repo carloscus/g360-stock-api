@@ -365,6 +365,13 @@ Variables de entorno (prefix `S1_`):
 | `S1_CATALOGO_REFRESH_COOLDOWN_SEG` | `300` | Segundos sin reintentar refresh del catálogo tras fallos (anti-storm) |
 | `S1_REQUEST_TIMEOUT` | `30` | Timeout en segundos |
 | `S1_CORS_ORIGINS` | `*` | Orígenes CORS permitidos |
+
+### Plan gratuito (Render Free)
+
+- El servicio corre en **plan Free** (512 MB RAM, 5 GB bandwidth/mes). Uso observado: ~20 MB RAM.
+- El disco es efimero: los caches (`data/*.json`) se regeneran al arrancar desde GitHub/S1.
+- El free tier duerme tras inactividad. `stock_cipsa.yaml` incluye un cron `stock-ping` cada 14 min que hace `GET /api/v1/health` para evitar cold starts.
+- `GET /api/v1/health` es publico (sin API key) para que Render healthcheck y el cron funcionen.
 | `S1_CIRCUIT_BREAKER_MAX_FALLOS` | `3` | Fallos antes de abrir circuito |
 | `S1_CIRCUIT_BREAKER_RESET_SEG` | `300` | Segundos para resetear circuito |
 | `S1_XLS_MAX_BYTES` | `5242880` | Máximo tamaño de XLS/JSON (5 MB) en descargas y uploads |

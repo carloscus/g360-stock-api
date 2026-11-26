@@ -71,6 +71,11 @@ class CatalogService:
         """Metadata del catalogo (incluye la taxonomia publicada)."""
         return self._meta or {}
 
+    def almacenes_nombres(self) -> dict[str, str]:
+        """Mapa nombre descriptivo de almacen publicado por master-data."""
+        mapa = self._meta.get("almacenes", {}).get("nombres", {}) or {}
+        return {str(k).strip(): str(v).strip() for k, v in mapa.items()}
+
     @property
     def categorias_por_linea(self) -> dict:
         """Taxonomia linea(codigo) -> categoria, publicada por master-data.
@@ -233,8 +238,10 @@ class CatalogService:
             try:
                 from app.services.s1_service import servicio_stock
                 servicio_stock.re_enriquecer()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.exception(
+                    "Re-enriquecimiento fallo tras cargar catalogo: %s", e
+                )
             return {
                 "total_skus": len(catalog),
                 "con_ean14": sum(1 for p in catalog.values() if p.get("ean14")),

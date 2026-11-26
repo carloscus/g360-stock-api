@@ -439,13 +439,7 @@ class ServicioStock:
             for alm in item.almacenes:
                 almacenes_vistos[alm.almacen] = almacenes_vistos.get(alm.almacen, 0) + 1
         # Obtener nombres de almacenes desde catalogo si hay
-        catalog_nombres = {}
-        try:
-            catalog_nombres = catalog_service._meta.get("almacenes", {}).get(
-                "nombres", {}
-            )
-        except (AttributeError, TypeError):
-            pass
+        catalog_nombres = catalog_service.almacenes_nombres()
 
         resultado = sorted(
             [
@@ -467,8 +461,9 @@ class ServicioStock:
         self._refrescar_si_es_necesario("general")
         lineas_vistas: dict[str, int] = {}
         for item in self._items_general:
-            if item.linea:
-                lineas_vistas[item.linea] = lineas_vistas.get(item.linea, 0) + 1
+            lid = item.linea_id or ""
+            if lid:
+                lineas_vistas[lid] = lineas_vistas.get(lid, 0) + 1
         return sorted(
             [{"linea": k, "total_skus": v} for k, v in lineas_vistas.items()],
             key=lambda x: x["linea"],
@@ -482,8 +477,9 @@ class ServicioStock:
             if cat not in cats:
                 cats[cat] = {"categoria": cat, "total_skus": 0, "lineas": set()}
             cats[cat]["total_skus"] += 1
-            if item.linea:
-                cats[cat]["lineas"].add(item.linea)
+            lid = item.linea_id or ""
+            if lid:
+                cats[cat]["lineas"].add(lid)
         return sorted(
             [
                 {
@@ -971,15 +967,11 @@ class ServicioStock:
     ) -> list[ItemStock]:
         """Transforma los datos crudos del reporte en items estandarizados."""
         # Obtener nombres de almacenes desde catalogo si hay
-        catalog_nombres = {}
         try:
-            from app.services.catalog_service import catalog_service
-
-            catalog_nombres = catalog_service._meta.get("almacenes", {}).get(
-                "nombres", {}
-            )
-        except (AttributeError, TypeError, ImportError):
-            pass
+            from app.services.catalog_service import catalog_service as _cs
+            catalog_nombres = _cs.almacenes_nombres()
+        except Exception:
+            catalog_nombres = {}
 
         skus_unicos: dict[str, dict] = {}
         for almacen, productos in datos.items():

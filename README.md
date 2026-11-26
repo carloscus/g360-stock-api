@@ -63,6 +63,7 @@ flowchart TD
 - [Tipos de almacén](#tipos-de-almacén)
 - [Fuentes de datos](#fuentes-de-datos)
 - [Catálogo maestro](#catálogo-maestro)
+- [Contrato de datos y trazabilidad](#contrato-de-datos-y-trazabilidad)
 - [Cache](#cache)
 - [Configuración](#configuración)
 - [Desarrollo](#desarrollo)
@@ -314,6 +315,46 @@ Cargado desde `g360-master-data` (JSON en GitHub):
 Campos usados: `sku`, `linea`, `linea_nombre`, `linea_codigo` (origen preferido de `linea_id`; sin él cae al código del reporte o al prefijo del SKU), `grupo`, `grupo_id`, `tipo`, `tipo_id`, `familia`, `familia_id`, `categoria`, `categoria_venta`, `um`, `um_nombre`, `ean13`, `ean14`, `un_bx`, `peso_kg`, `precio`, `keywords`, `nombre_corto`, `descontinuado`, y los flags `en_guia`, `compromiso`, `cotizable`, `por_activar`, `vigente`, `origen`, `derivado_de` (el reporter usa `descontinuado` para el badge "Descontinuado"/"Últimas unidades"). La UM se integra desde KARDEX_BASE.xlsx (97.9% cobertura).
 
 ---
+
+## Contrato de datos y trazabilidad
+
+### Fuente de verdad
+
+| Dominio | Fuente canónica | Qué aporta | Qué NO aporta |
+|---------|-----------------|------------|---------------|
+| Catálogo / taxonomía / ficha comercial | `g360-master-data` → `output/catalogo_productos.json` | `sku`, `linea/linea_codigo/linea_nombre`, `grupo/tipo/familia` + IDs, `categoria`, `categoria_venta`, `um`, `un_bx`, `peso_kg`, `precio`, EAN, keywords, flags (`en_guia`, `cotizable`, `por_activar`, `vigente`, `descontinuado`, `origen`, `derivado_de`) | Stock en tiempo real por almacén |
+| Stock operativo | S1/appweb (XLS general/sucursales) | `stock`, `predespacho`, `disponible`, almacenes, UM reportada, descripción/linea/grupo/tipo/familia del reporte | Precio, peso, caja, EAN maestro, allowlist comercial |
+| Integración / respuesta API | `g360-stock-api` | Merge, enriquecimiento, `sin_catalogo`, `sin_stock`, `revision`, normalización, cache/TTL, metadata de traza | No inventa catálogo; no publica ficha comercial completa fuera del allowlist |
+
+### Semántica de respuesta
+
+| Caso | Endpoint | Respuesta | Significado |
+|------|----------|-----------|-------------|
+| SKU en reporte y/o catálogo, con ficha | `/api/v1/stock/{sku}` | `200`, `sin_stock=false` | SKU con stock/reportado; puede estar enriquecido o `sin_catalogo=true` |
+| SKU en catálogo pero ausente en reporte | `/api/v1/stock/{sku}` | `200`, `sin_stock=true`, `almacenes=[]` | Producto vigente/publicado, aún sin stock en reporte |
+| SKU con stock pero fuera de catálogo | `/stock`, `/stock/{sku}` | `200`, `sin_catalogo=true` | Existe en reporte, pero no está en allowlist del catálogo maestro; no se asume precio/peso/caja |
+| SKU inexistente en reporte y catálogo | `/api/v1/stock/{sku}` | `404` | No existe para el API |
+| Cache vencido servido | `/stock*` | `200`, `metadata.cache_expirado=true` | Se sirvió último cache válido por TTL/falla/circuito/fuera de horario |
+
+### Trazabilidad
+
+| Campo | Dónde | Propósito |
+|-------|-------|-----------|
+| `origen` | item/catalog | Fuente de ficha comercial: `erp` o `s1` |
+| `derivado_de` | item/catalog | SKU base cuando aplica derivado (compatibilidad/traza) |
+| `stock_snapshot` | `/api/v1/catalog` | Stock S1 al generar el catálogo (trazabilidad, no tiempo real) |
+| `predespacho_snapshot` | `/api/v1/catalog` | Compromiso S1 al generar el catálogo (trazabilidad) |
+| `metadata.generated_at` | `/api/v1/catalog` | Fecha de generación/carga del catálogo |
+| `metadata.categorias_por_linea` | `/api/v1/catalog` | Taxonomía línea(código)→categoría publicada por master-data |
+| `metadata.lineas_nombre_a_codigo` | `/api/v1/catalog` | Mapa nombre→código publicado por master-data |
+| `revision` | `/stock`, `/stock/skus` | Badge calculado: `sin_catalogo` → `por_activar` → `revision_venta` → `descontinuado` → `compromiso` → `""` |
+
+### Contrato de `/api/v1/catalog`
+
+- Devuelve **catálogo maestro publicado**, sin almacenes y sin stock en tiempo real.
+- Incluye metadata de taxonomía para que consumidores no dupliquen reglas locales.
+- `stock_snapshot`/`predespacho_snapshot` son **trazabilidad de generación**, no sustituyen `/api/v1/stock`.
+- El catálogo es **allowlist**: si un SKU no está publicado, el API puede reportarlo como `sin_catalogo`, pero no debe exponerlo como ficha comercial completa.
 
 ## Cache
 

@@ -97,10 +97,10 @@ Cada item trae estos flags (los publica el catálogo maestro):
 
 ### Desde curl (terminal)
 ```bash
-curl -H "X-API-Key: cipsa2026" \
+curl -H "X-API-Key: [TU_API_KEY]" \
   "https://g360-stock-api.onrender.com/api/v1/stock?almacen=VES&limit=5"
 
-curl -H "X-API-Key: cipsa2026" \
+curl -H "X-API-Key: [TU_API_KEY]" \
   "https://g360-stock-api.onrender.com/api/v1/stock/02217"
 ```
 
